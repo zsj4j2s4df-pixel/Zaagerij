@@ -1,0 +1,55 @@
+name: Deploy Zaagerij naar GitHub Pages
+
+# Publiceert de Zaagerij-app (statische PWA: index.html + app.js + service-worker
+# + iconen) naar GitHub Pages bij elke push naar main. Handmatig starten kan ook.
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "index.html"
+      - "app.js"
+      - "manifest.webmanifest"
+      - "service-worker.js"
+      - "icon-*.png"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Code ophalen
+        uses: actions/checkout@v4
+      - name: Statische bestanden verzamelen
+        run: |
+          mkdir -p _site
+          cp index.html app.js manifest.webmanifest service-worker.js _site/
+          cp icon-180.png icon-192.png icon-512.png icon-512-maskable.png _site/
+      - name: GitHub Pages voorbereiden
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - name: App klaarzetten
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publiceren op GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
