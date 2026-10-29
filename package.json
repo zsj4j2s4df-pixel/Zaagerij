@@ -1,0 +1,39 @@
+{
+  "name": "zaagerij",
+  "version": "2.0.0",
+  "description": "Zaagerij — voorbereiding en uitvoering van metaalzaagwerk",
+  "main": "app.js",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "test": "node --test tests/*.test.js",
+    "test:e2e": "playwright test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zsj4j2s4df-pixel/Zaagerij.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/zsj4j2s4df-pixel/Zaagerij/issues"
+  },
+  "homepage": "https://github.com/zsj4j2s4df-pixel/Zaagerij#readme",
+  "dependencies": {
+    "@supabase/supabase-js": "2.118.0",
+    "lucide-react": "1.64.0",
+    "qrcode": "1.5.4",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261029.1",
+    "@playwright/test": "1.64.1",
+    "@vitejs/plugin-react": "6.1.2",
+    "prettier": "3.9.10",
+    "vite": "8.3.5"
+  },
+  "private": true
+}
