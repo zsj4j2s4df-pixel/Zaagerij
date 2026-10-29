@@ -1,56 +1,90 @@
-import { createClient } from "@supabase/supabase-js";
-const url = import.meta.env.VITE_SUPABASE_URL,
-  key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-export const cloud = url && key ? createClient(url, key) : null;
-export async function publish(doc, baseVersion) {
-  if (!cloud) throw Error("Centrale opslag is nog niet gekoppeld.");
-  const { data, error } = await cloud.rpc("zaagerij_publish", {
-    p_id: doc.id,
-    p_document: doc,
-    p_base: baseVersion ?? 0,
-  });
-  if (error) throw error;
+export async function api(path, options = {}) {
+  let response;
+  try {
+    response = await fetch("/api/" + path, {
+      credentials: "same-origin",
+      ...options,
+      headers: {
+        ...(options.body && !(options.body instanceof Blob)
+          ? { "Content-Type": "application/json" }
+          : {}),
+        ...options.headers,
+      },
+    });
+  } catch {
+    throw Error("Geen verbinding. Je lokale werk blijft behouden.");
+  }
+  if (!response.headers.get("Content-Type")?.includes("application/json"))
+    throw Error("Log opnieuw in via Cloudflare Access.");
+  const data = await response.json();
+  if (!response.ok) throw Error(data.error || "Centrale aanvraag mislukt.");
   return data;
+}
+export async function sessionInfo() {
+  try {
+    return await api("session");
+  } catch {
+    return null;
+  }
+}
+export function login() {
+  location.assign("/api/login");
+}
+export function logout() {
+  location.assign("/cdn-cgi/access/logout");
+}
+export async function publish(document, baseVersion = 0) {
+  return (
+    await api("projects/" + document.id, {
+      method: "PUT",
+      body: JSON.stringify({ document, baseVersion }),
+    })
+  ).version;
 }
 export async function fetchVersion(id) {
-  if (!cloud) throw Error("Log in om een gedeelde lijst te openen.");
-  const { data, error } = await cloud
-    .from("zaagerij_projects")
-    .select("*")
-    .eq("id", id)
-    .single();
-  if (error) throw error;
-  return data;
+  return api("projects/" + id);
+}
+export async function listCentral() {
+  return (await api("projects")).projects;
 }
 export async function syncProgress(doc) {
-  if (!cloud) throw Error("Centrale opslag is nog niet gekoppeld.");
-  const {
-    data: { user },
-  } = await cloud.auth.getUser();
-  if (!user) throw Error("Log eerst in.");
-  const rows = doc.events
+  const events = doc.events
     .filter((e) => e.kind === "good")
     .map((e) => ({
-      project_id: doc.id,
-      unit: e.unit,
-      event: {
-        ...e,
-        signature: JSON.stringify(
-          doc.pieces.find((p) => e.unit.startsWith(p.id + ":")),
-        ),
-      },
-      user_id: user.id,
+      ...e,
+      signature: JSON.stringify(
+        doc.pieces.find((p) => e.unit.startsWith(p.id + ":")),
+      ),
     }));
-  if (rows.length) {
-    const { error } = await cloud
-      .from("zaagerij_progress")
-      .upsert(rows, { onConflict: "project_id,unit", ignoreDuplicates: true });
-    if (error) throw error;
-  }
-  const { data, error } = await cloud
-    .from("zaagerij_progress")
-    .select("event")
-    .eq("project_id", doc.id);
-  if (error) throw error;
-  return data.map((r) => r.event);
+  return (
+    await api("projects/" + doc.id + "/progress", {
+      method: "POST",
+      body: JSON.stringify({ events, version: doc.cloudVersion }),
+    })
+  ).events;
+}
+export async function uploadFile(projectId, attachment, file) {
+  return api(
+    "projects/" +
+      projectId +
+      "/files?id=" +
+      encodeURIComponent(attachment.id) +
+      "&name=" +
+      encodeURIComponent(attachment.name),
+    {
+      method: "PUT",
+      body: file,
+      headers: { "Content-Type": file.type || "application/octet-stream" },
+    },
+  );
+}
+export async function downloadFile(projectId, id) {
+  const r = await fetch(
+    "/api/projects/" + projectId + "/files?id=" + encodeURIComponent(id),
+  );
+  if (!r.ok || r.redirected)
+    throw Error(
+      "Bijlage niet beschikbaar. Log in of synchroniseer het oorspronkelijke apparaat.",
+    );
+  return r.blob();
 }

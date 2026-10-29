@@ -1,6 +1,6 @@
 # Zaagerij 2.0
 
-Voorbereiden op kantoor, aflezen en registreren bij de metaalzaag. React + Vite, met optionele Supabase-authenticatie/opslag en een Cloudflare Pages Function voor OpenAI-tekeningherkenning.
+Voorbereiden op kantoor, aflezen en registreren bij de metaalzaag. React + Vite, met Cloudflare Access, D1-opslag en een Cloudflare Pages Function voor OpenAI-tekeningherkenning.
 
 ## Starten
 
@@ -25,7 +25,7 @@ Publiceer `dist/` met de `functions/` map als Cloudflare Pages-project. Build: `
 
 ## Centrale onderdelen
 
-Zie [installatie](docs/INSTALLATIE.md). De integratiecode is aanwezig, maar een database, toegangsrechten en secrets moeten daadwerkelijk geconfigureerd zijn voordat login, centrale QR-deling en AI werken. De app meldt dit expliciet als configuratie ontbreekt.
+Zie [installatie](docs/INSTALLATIE.md). D1 en Access zijn ingericht. Toegang vereist een toegelaten medewerker. R2 en de OpenAI-secret moeten nog worden geactiveerd voor centrale bijlagen en AI. Ontbrekende configuratie wordt expliciet gemeld.
 
 ## Rekenmodel en grenzen
 

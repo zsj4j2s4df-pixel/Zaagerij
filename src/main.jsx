@@ -51,7 +51,17 @@ import {
   filePut,
   fileGet,
 } from "./storage";
-import { cloud, publish, fetchVersion, syncProgress } from "./cloud";
+import {
+  publish,
+  fetchVersion,
+  syncProgress,
+  sessionInfo,
+  login as accessLogin,
+  logout,
+  listCentral,
+  uploadFile,
+  downloadFile,
+} from "./cloud";
 import "./style.css";
 const tabs = [
   ["projects", "Projecten", FolderOpen],
@@ -329,7 +339,9 @@ function App() {
     }
   }
   async function viewAttachment(a) {
-    const f = await fileGet(a.id);
+    const f =
+      (await fileGet(a.id)) ||
+      (session ? await downloadFile(doc.id, a.id).catch(() => null) : null);
     if (!f)
       return notify(
         "Deze bijlage is alleen beschikbaar op het apparaat waarop hij is toegevoegd.",
@@ -353,6 +365,12 @@ function App() {
         return;
       }
       const version = await publish(doc, cloudVersion);
+      if (session.storage?.attachments) {
+        for (const a of doc.attachments) {
+          const f = await fileGet(a.id);
+          if (f) await uploadFile(doc.id, a, f);
+        }
+      }
       setCloudVersion(version);
       const d = save({ ...doc, cloudVersion: version });
       setDoc(d);
@@ -385,20 +403,9 @@ function App() {
     setQr(await QRCode.toDataURL(url, { width: 280, margin: 2 }));
     setModal({ kind: "share", url });
   }
-  async function login(e) {
+  function login(e) {
     e.preventDefault();
-    if (!cloud)
-      return notify(
-        "Supabase is nog niet gekoppeld. Lokaal werken blijft beschikbaar.",
-      );
-    setBusy(true);
-    const { error } = await cloud.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: location.origin, shouldCreateUser: false },
-    });
-    setBusy(false);
-    if (error) notify(error.message);
-    else notify("Controleer je e-mail voor de inloglink.");
+    accessLogin();
   }
   function cut() {
     if (!current) return;
@@ -422,15 +429,9 @@ function App() {
       no = () => setOnline(false);
     window.addEventListener("online", yes);
     window.addEventListener("offline", no);
-    if (cloud) {
-      cloud.auth.getSession().then(({ data }) => setSession(data.session));
-      const { data } = cloud.auth.onAuthStateChange((_, s) => setSession(s));
-      return () => {
-        data.subscription.unsubscribe();
-        window.removeEventListener("online", yes);
-        window.removeEventListener("offline", no);
-      };
-    }
+    sessionInfo().then((info) =>
+      setSession(info ? { user: info.user, storage: info.storage } : null),
+    );
     return () => {
       window.removeEventListener("online", yes);
       window.removeEventListener("offline", no);
@@ -619,6 +620,20 @@ function App() {
           {tab === "projects" && (
             <>
               <div className="project-toolbar">
+                <Button
+                  icon={Cloud}
+                  onClick={async () => {
+                    try {
+                      const rows = await listCentral();
+                      setModal({ kind: "central", rows });
+                    } catch (e) {
+                      notify(e.message);
+                      setModal({ kind: "login" });
+                    }
+                  }}
+                >
+                  Centrale lijsten
+                </Button>
                 <label className="search">
                   <Search size={18} />
                   <input
@@ -1508,6 +1523,21 @@ function App() {
             >
               <X />
             </button>
+            {modal.kind === "central" && (
+              <>
+                <h2>Centrale zaaglijsten</h2>
+                <div className="stack">
+                  {modal.rows.map((row) => (
+                    <Button key={row.id} onClick={() => checkUpdate(row.id)}>
+                      {row.name} · v{row.version}
+                    </Button>
+                  ))}
+                  {!modal.rows.length && (
+                    <p>Nog geen centraal gepubliceerde lijsten.</p>
+                  )}
+                </div>
+              </>
+            )}
             {modal.kind === "save" && (
               <>
                 <h2>Opslaan & bewaren</h2>
@@ -1593,12 +1623,12 @@ function App() {
                 <p>
                   {session
                     ? session.user.email
-                    : "Log in via een veilige link in je e-mail. Alleen uitgenodigde medewerkers hebben toegang."}
+                    : "Log in via Cloudflare Access. Alleen toegelaten medewerkers hebben toegang."}
                 </p>
                 {session ? (
                   <Button
                     onClick={async () => {
-                      await cloud.auth.signOut();
+                      logout();
                       setModal(null);
                     }}
                   >
@@ -1606,21 +1636,13 @@ function App() {
                   </Button>
                 ) : (
                   <form onSubmit={login}>
-                    <Field label="E-mailadres">
-                      <input
-                        type="email"
-                        required
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                      />
-                    </Field>
-                    <Button primary disabled={busy || !cloud}>
-                      Stuur inloglink
+                    <Button primary disabled={busy}>
+                      Inloggen via Cloudflare
                     </Button>
-                    {!cloud && (
+                    {!session && (
                       <p className="notice">
-                        Centrale opslag is nog niet gekoppeld. Je kunt lokaal
-                        blijven werken en back-ups downloaden.
+                        Log in met een eenmalige e-mailcode via Cloudflare
+                        Access. Lokaal werken blijft beschikbaar.
                       </p>
                     )}
                   </form>
@@ -1969,7 +1991,6 @@ function AIReader({ attachment, session, onApply }) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: "Bearer " + session.access_token,
         },
         body: JSON.stringify({ name: f.name, type: f.type, data }),
       });

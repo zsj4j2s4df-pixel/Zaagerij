@@ -1,0 +1,8 @@
+CREATE TABLE IF NOT EXISTS members(email TEXT PRIMARY KEY COLLATE NOCASE,role TEXT NOT NULL CHECK(role IN ('office','workshop')));
+CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY,name TEXT NOT NULL,version INTEGER NOT NULL CHECK(version>0),document TEXT NOT NULL CHECK(json_valid(document)),updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS versions(project_id TEXT NOT NULL REFERENCES projects(id),version INTEGER NOT NULL,document TEXT NOT NULL,author TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(project_id,version));
+CREATE TABLE IF NOT EXISTS progress(project_id TEXT NOT NULL REFERENCES projects(id),unit TEXT NOT NULL,event TEXT NOT NULL CHECK(json_valid(event)),author TEXT NOT NULL,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(project_id,unit));
+CREATE TABLE IF NOT EXISTS ai_usage(email TEXT NOT NULL,day TEXT NOT NULL,used INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(email,day));
+CREATE TABLE IF NOT EXISTS attachments(project_id TEXT NOT NULL REFERENCES projects(id),id TEXT NOT NULL,object_key TEXT NOT NULL,name TEXT NOT NULL,type TEXT NOT NULL,size INTEGER NOT NULL,PRIMARY KEY(project_id,id));
+CREATE TRIGGER IF NOT EXISTS project_first_version AFTER INSERT ON projects BEGIN INSERT INTO versions(project_id,version,document,author) VALUES(NEW.id,NEW.version,NEW.document,'kantoor'); END;
+CREATE TRIGGER IF NOT EXISTS project_next_version AFTER UPDATE ON projects WHEN NEW.version<>OLD.version BEGIN INSERT INTO versions(project_id,version,document,author) VALUES(NEW.id,NEW.version,NEW.document,'kantoor'); END;

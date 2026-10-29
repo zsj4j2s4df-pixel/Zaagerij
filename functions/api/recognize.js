@@ -6,56 +6,23 @@ const json = (body, status = 200) =>
       "X-Content-Type-Options": "nosniff",
     },
   });
-export async function onRequestPost({ request, env }) {
+export async function onRequestPost({ request, env, data }) {
   try {
     if (new URL(request.url).origin !== request.headers.get("Origin"))
       return json({ error: "Ongeldige herkomst." }, 403);
-    if (
-      !env.OPENAI_API_KEY ||
-      !env.SUPABASE_URL ||
-      !env.SUPABASE_PUBLISHABLE_KEY
-    )
+    if (!env.OPENAI_API_KEY || !env.DB)
       return json(
         { error: "AI-herkenning is nog niet ingesteld door de beheerder." },
         503,
       );
-    const auth = request.headers.get("Authorization");
-    if (!auth?.startsWith("Bearer ") || auth.length > 8192)
-      return json({ error: "Log eerst in." }, 401);
-    const headers = {
-      apikey: env.SUPABASE_PUBLISHABLE_KEY,
-      Authorization: auth,
-    };
-    const userResponse = await fetch(env.SUPABASE_URL + "/auth/v1/user", {
-      headers,
-      signal: AbortSignal.timeout(10000),
-    });
-    if (!userResponse.ok)
-      return json({ error: "Je sessie is verlopen. Log opnieuw in." }, 401);
-    const user = await userResponse.json();
-    const memberResponse = await fetch(
-      env.SUPABASE_URL +
-        "/rest/v1/zaagerij_members?select=user_id&user_id=eq." +
-        encodeURIComponent(user.id),
-      { headers, signal: AbortSignal.timeout(10000) },
-    );
-    if (!memberResponse.ok || (await memberResponse.json()).length !== 1)
-      return json({ error: "Geen toegang tot Zaagerij." }, 403);
-    // Database quota is atomic and survives worker restarts; fail closed without quota.
-    const quota = await fetch(
-      env.SUPABASE_URL + "/rest/v1/rpc/zaagerij_ai_quota",
-      {
-        method: "POST",
-        headers: { ...headers, "Content-Type": "application/json" },
-        body: "{}",
-        signal: AbortSignal.timeout(10000),
-      },
-    );
-    if (!quota.ok || !(await quota.json()))
-      return json(
-        { error: "Daglimiet voor herkenning bereikt. Probeer later opnieuw." },
-        429,
-      );
+    const email = data.user.email;
+    const quota = await env.DB.prepare(
+      "INSERT INTO ai_usage(email,day,used) VALUES(?,date('now'),1) ON CONFLICT(email,day) DO UPDATE SET used=used+1 WHERE used<30 RETURNING used",
+    )
+      .bind(email)
+      .first();
+    if (!quota)
+      return json({ error: "Daglimiet bereikt. Probeer morgen opnieuw." }, 429);
     const reader = request.body?.getReader();
     if (!reader) return json({ error: "Bestand ontbreekt." }, 400);
     let bytes = 0,
