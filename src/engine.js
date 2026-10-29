@@ -109,12 +109,7 @@ export function plan(doc) {
         piece.long +
         +profile.kerf / Math.sin((+piece.left * Math.PI) / 180) +
         +profile.kerf / Math.sin((+piece.right * Math.PI) / 180);
-      let fits = bins.filter(
-        (b) =>
-          b.capacity - b.used >=
-          required +
-            (!b.items.length && b.endAngle !== +piece.left ? +profile.kerf : 0),
-      );
+      let fits = bins.filter((b) => b.capacity - b.used >= required);
       fits.sort(
         (a, b) =>
           (doc.useRemnants
@@ -142,8 +137,7 @@ export function plan(doc) {
         };
         bins.push(bar);
       }
-      const trim =
-        !bar.items.length && bar.endAngle !== +piece.left ? +profile.kerf : 0;
+      const trim = 0; // Both independent saw cuts are already included in required.
       bar.used += required + trim;
       bar.items.push({ ...piece, required, trim });
     }

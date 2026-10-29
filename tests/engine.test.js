@@ -99,7 +99,7 @@ test("usable remnants have priority and measured angle trim is included", () => 
   d.useRemnants = true;
   const p = plan(d);
   assert.equal(p.bars[0].source, "rest");
-  assert.equal(p.bars[0].used, 2415);
+  assert.equal(p.bars[0].used, 2412);
   assert.equal(p.check.ok, true);
 });
 
@@ -114,4 +114,13 @@ test("time scheduling respects physical order within each bar", () => {
       b.items.flatMap((x) => [x.unit + ":links", x.unit + ":rechts"]),
     );
   }
+});
+
+test("angled blank near stock capacity is rejected without overflow", () => {
+  const d = base();
+  d.pieces[0] = { ...d.pieces[0], length: 5993, qty: 1, left: 45, right: 45 };
+  const p = plan(d);
+  assert.equal(p.bars.length, 0);
+  assert.equal(p.unplaced.length, 1);
+  assert.equal(p.check.ok, true);
 });

@@ -5,3 +5,5 @@ dist/
 .dev.vars*
 playwright-report/
 test-results/
+
+supabase/.temp/
