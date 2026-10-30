@@ -46,3 +46,9 @@ Het originele blauwe bedrijfslogo komt van `https://www.avandervelden.nl/img/Van
 ## Verificatie
 
 `npm test` controleert de rekenbalans, aantallen, zaagverlies, profielscheiding en fysieke snedevolgorde. Browserchecks controleren opslag/kopie, mobiele uitvoering, verwijderbevestiging en zichtbare bijlagen. Screenshots staan in `docs/`.
+
+## Ontwerp beoordelen
+
+Open `/review/` voor acht mobiele schermvoorbeelden. Wissel met Vorige/Volgende, teken met vinger/muis en plaats opmerkingen. Alles blijft lokaal in de browser. Download de ZIP om opmerkingen en geannoteerde PNG's met de ontwikkelaar te delen; er wordt niets automatisch verstuurd. De voorbeelden bevatten uitsluitend demo-invoer. Regenereren na schermwijzigingen: draai de ontwikkelserver op poort 5173 en voer `node scripts/review-assets.mjs` uit.
+
+Het appicoon is versiegebonden en gebruikt het originele bedrijfsbeeldmerk. iOS kan een eerder geïnstalleerd beginschermicoon vasthouden; verwijder in dat geval alleen de snelkoppeling en voeg de website opnieuw toe aan het beginscherm. Wis geen websitegegevens: lokale zaaglijsten staan daarin.

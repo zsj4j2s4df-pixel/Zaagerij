@@ -63,6 +63,7 @@ import {
   downloadFile,
 } from "./cloud";
 import "./style.css";
+import Review from "./Review";
 const tabs = [
   ["projects", "Projecten", FolderOpen],
   ["input", "Invoer", List],
@@ -512,6 +513,7 @@ function App() {
           ))}
         </nav>
         <div className="sidebar-bottom">
+          <a href="/review/">Ontwerp beoordelen & tekenen ↗</a>
           <div className="tip">
             <span className="dot" /> Gebouwd voor de werkplaats
             <p>
@@ -547,6 +549,23 @@ function App() {
             </button>
           </div>
         </header>
+        <div
+          className={"auth-status " + (session ? "signed-in" : "local-only")}
+          role="status"
+        >
+          <span>
+            {session
+              ? `Ingelogd als ${session.user.email}`
+              : "Lokaal gebruik · niet ingelogd"}
+          </span>
+          <button
+            onClick={() =>
+              session ? setModal({ kind: "login" }) : accessLogin()
+            }
+          >
+            {session ? "Account bekijken" : "Inloggen voor centrale opslag"}
+          </button>
+        </div>
         <main>
           <div className="page-heading">
             <div>
@@ -843,7 +862,7 @@ function App() {
                         {doc.pieces.map((p) => (
                           <React.Fragment key={p.id}>
                             <tr>
-                              <td>
+                              <td data-label="Stuknummer">
                                 <input
                                   aria-label="Stuknummer"
                                   value={p.code}
@@ -852,7 +871,7 @@ function App() {
                                   }
                                 />
                               </td>
-                              <td>
+                              <td data-label="Aantal">
                                 <input
                                   aria-label={"Aantal " + p.code}
                                   type="number"
@@ -863,7 +882,7 @@ function App() {
                                   }
                                 />
                               </td>
-                              <td>
+                              <td data-label="Lengte · mm">
                                 <input
                                   aria-label={"Lengte " + p.code}
                                   type="number"
@@ -874,7 +893,14 @@ function App() {
                                 />
                               </td>
                               {["left", "right"].map((k) => (
-                                <td key={k}>
+                                <td
+                                  key={k}
+                                  data-label={
+                                    k === "left"
+                                      ? "Linkerhoek · tekening"
+                                      : "Rechterhoek · tekening"
+                                  }
+                                >
                                   <div className="angle-input">
                                     <input
                                       aria-label={
@@ -912,7 +938,7 @@ function App() {
                                   </div>
                                 </td>
                               ))}
-                              <td>
+                              <td data-label="Maatbasis">
                                 <select
                                   value={p.basis}
                                   onChange={(e) =>
@@ -2073,7 +2099,9 @@ function AIReader({ attachment, session, onApply }) {
     </>
   );
 }
-createRoot(document.getElementById("root")).render(<App />);
+createRoot(document.getElementById("root")).render(
+  location.pathname.startsWith("/review") ? <Review /> : <App />,
+);
 if ("serviceWorker" in navigator)
   window.addEventListener("load", () =>
     navigator.serviceWorker.register("/service-worker.js").catch(() => {}),

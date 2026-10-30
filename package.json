@@ -23,6 +23,7 @@
   "homepage": "https://github.com/zsj4j2s4df-pixel/Zaagerij#readme",
   "dependencies": {
     "jose": "6.2.14",
+    "jszip": "3.10.2",
     "lucide-react": "1.64.0",
     "qrcode": "1.5.4",
     "react": "19.3.1",
