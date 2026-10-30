@@ -31,7 +31,7 @@ Zie [installatie](docs/INSTALLATIE.md). D1 en Access zijn ingericht. Toegang ver
 
 De maatbasis is standaard de bounding lengte tussen buitenste lange punten in één zaagvlak. Korte maat en hartmaat worden omgerekend met de breedte in dat vlak. 90° tekenhoek = 0° machinehoek. Hoeken 15–165°; geen samengestelde 3D-hoeken. Voor richting en omkeren moet de machineconventie ter plaatse worden bevestigd.
 
-De planner gebruikt conservatief twee losse sneden per stuk en zaagverlies `kerf/sin(tekenhoek)`. Er wordt geen gedeelde versteksnede of geometrische overlap geclaimd. De tijdstrategie kiest uit de eerst bereikbare sneden per staaf. Dit is een heuristiek en geen bewezen globaal optimum. Restmateriaal is een gemeten restlengte, nog niet automatisch ingedeeld in bewaarbaar reststuk versus afval op basis van een bedrijfsgrens.
+De planner gebruikt standaard twee losse sneden per stuk en geprojecteerd zaagverlies `kerf/sin(tekenhoek)`. Met Combineren ingeschakeld mogen opeenvolgende uiteinden één snede delen als hun snijvlakken in hetzelfde zaagvlak overeenkomen, inclusief snijrichting en toegestane oriëntatie. De twee zijden van elk profiel worden afzonderlijk gecontroleerd; bij een gedeelde snede worden beide betrokken stukuiteinden geregistreerd. De tijdstrategie kiest uit de eerst bereikbare sneden per staaf. Dit is een heuristiek en geen bewezen globaal optimum. Restmateriaal is een gemeten restlengte, nog niet automatisch ingedeeld in bewaarbaar reststuk versus afval op basis van een bedrijfsgrens.
 
 Bij herplannen vanuit een afwijking: meet de resterende lengte en eindhoek opnieuw. Niet-geregistreerde halfproducten moeten eerst worden afgehandeld; de app modelleert geen afzonderlijke voorraad halfproducten. Vooruitgang blijft lokaal totdat je die expliciet synchroniseert. Verschillen in kantoorversie vereisen acceptatie.
 
@@ -49,6 +49,14 @@ Het originele blauwe bedrijfslogo komt van `https://www.avandervelden.nl/img/Van
 
 ## Ontwerp beoordelen
 
-Open `/review/` voor acht mobiele schermvoorbeelden. Wissel met Vorige/Volgende, teken met vinger/muis en plaats opmerkingen. Alles blijft lokaal in de browser. Download de ZIP om opmerkingen en geannoteerde PNG's met de ontwikkelaar te delen; er wordt niets automatisch verstuurd. De voorbeelden bevatten uitsluitend demo-invoer. Regenereren na schermwijzigingen: draai de ontwikkelserver op poort 5173 en voer `node scripts/review-assets.mjs` uit.
+Open `/review/` voor de tweede ronde met acht mobiele schermvoorbeelden. De eerste ronde en de daarbij horende lokale opmerkingen blijven bereikbaar via `/review/?round=1`. Wissel met Vorige/Volgende, teken met vinger/muis en plaats opmerkingen. Alles blijft lokaal in de browser. Download de ZIP om opmerkingen en geannoteerde PNG's met de ontwikkelaar te delen; er wordt niets automatisch verstuurd. De voorbeelden bevatten uitsluitend demo-invoer. Regenereren na schermwijzigingen: draai de ontwikkelserver op poort 5173 en voer `node scripts/review-assets.mjs` uit.
 
 Het appicoon is versiegebonden en gebruikt het originele bedrijfsbeeldmerk. iOS kan een eerder geïnstalleerd beginschermicoon vasthouden; verwijder in dat geval alleen de snelkoppeling en voeg de website opnieuw toe aan het beginscherm. Wis geen websitegegevens: lokale zaaglijsten staan daarin.
+
+## Werkplaatsbediening
+
+Het staafbeeld staat centraal en gebruikt een vaste kleur per stuk, ook in de invoer. Tik op een stuk om het na bevestiging gereed te melden. Identieke indelingen zijn gegroepeerd, maar kunnen per staaf worden geopend voor individuele registratie. Veeg links voor het gereedoverzicht en rechts om terug te keren op dezelfde scrollpositie; de knop onderaan werkt ook. Formuliervelden en horizontaal scrollbare vlakken activeren geen veegactie.
+
+De instructie voor de volgende snede is inklapbaar. Omkeren betekent rollen om de lengteas: onderzijde wordt bovenzijde, zonder linker- en rechteruiteinde te verwisselen. De tekening wordt voor deze instructie naar de werkelijke kijkrichting omgezet. Groene grenzen in het staafbeeld zijn gedeelde sneden; de detailweergave toont de hoekrichting en oriëntatie per stuk. De weergave is schematisch. Zaagplannen van vóór dit geometrische model vragen expliciet om vernieuwen; reeds gezaagd materiaal moet via Afwijken met een gemeten restant worden voortgezet.
+
+Print/PDF bevat order- en klantgegevens, staafindelingen en bij centrale publicatie een QR-code. Dezelfde centrale link kan via WhatsApp, e-mail of het deelmenu van de telefoon worden doorgestuurd. Profielgeheugen blijft lokaal op het apparaat; materiaalkeuze is apart van profielafmeting.

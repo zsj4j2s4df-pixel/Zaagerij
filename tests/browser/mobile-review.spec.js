@@ -42,6 +42,7 @@ test("review saves comment and drawing across navigation and exports zip", async
     page.getByRole("img", { name: "Voorbeeldscherm Materiaal & instellingen" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Tekenen", exact: true }).click();
+  await page.evaluate(() => document.fonts.ready);
   const box = await page.locator(".review-screen canvas").boundingBox();
   await page.mouse.move(box.x + 30, box.y + 30);
   await page.mouse.down();
@@ -107,7 +108,7 @@ test("text comments can point to a specific place and persist", async ({
     page.getByRole("button", { name: "Opmerking 1: Deze maat groter tonen." }),
   ).toBeVisible();
   const stored = await page.evaluate(() =>
-    JSON.parse(localStorage.getItem("zaagerij:review:2026-10-30")),
+    JSON.parse(localStorage.getItem("zaagerij:review:2026-10-30-r2")),
   );
   expect(stored.invoer.pins[0].x).toBeGreaterThan(0);
   expect(stored.invoer.pins[0].y).toBeGreaterThan(0);

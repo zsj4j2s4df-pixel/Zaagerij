@@ -30,6 +30,8 @@ import {
   AlertTriangle,
   Scissors,
   FileText,
+  Printer,
+  Calculator as CalculatorIcon,
 } from "lucide-react";
 import QRCode from "qrcode";
 import {
@@ -39,6 +41,7 @@ import {
   recordGood,
   machineAngle,
   validate,
+  signatureMatches,
 } from "./engine";
 import {
   fresh,
@@ -50,6 +53,9 @@ import {
   legacy,
   filePut,
   fileGet,
+  profileLibrary,
+  rememberProfile,
+  withColors,
 } from "./storage";
 import {
   publish,
@@ -64,6 +70,8 @@ import {
 } from "./cloud";
 import "./style.css";
 import Review from "./Review";
+import { Calculator, PlanBars, PieceShape, ProgressOverview } from "./SawTools";
+import { colorFor, pieceColors } from "./geometry";
 const tabs = [
   ["projects", "Projecten", FolderOpen],
   ["input", "Invoer", List],
@@ -131,7 +139,9 @@ function AngleSketch({ left = 45, right = 45 }) {
 function App() {
   const [doc, setDoc] = useState(() => {
       try {
-        return JSON.parse(localStorage.getItem("zaagerij:working")) || demo();
+        return withColors(
+          JSON.parse(localStorage.getItem("zaagerij:working")) || demo(),
+        );
       } catch {
         return demo();
       }
@@ -150,11 +160,17 @@ function App() {
     [busy, setBusy] = useState(false),
     [email, setEmail] = useState(""),
     [cloudVersion, setCloudVersion] = useState(0),
-    [qr, setQr] = useState("");
+    [qr, setQr] = useState(""),
+    [progressOpen, setProgressOpen] = useState(false),
+    [library, setLibrary] = useState(profileLibrary),
+    [printQr, setPrintQr] = useState("");
   const importRef = useRef(),
     cameraRef = useRef(),
-    attachmentRef = useRef();
+    attachmentRef = useRef(),
+    swipeRef = useRef(null),
+    returnScroll = useRef(0);
   const calculated = useMemo(() => plan(doc), [doc]);
+  const legacyPlan = !!doc.execution && doc.execution.model !== "planar-v2";
   const result = doc.execution
     ? {
         ...doc.execution,
@@ -179,10 +195,13 @@ function App() {
   }
   function updatePiece(id, key, value) {
     if (
-      doc.events.some((e) => e.kind === "good" && e.unit.startsWith(id + ":"))
+      doc.events.some(
+        (e) => e.kind === "good" && e.unit.startsWith(id + ":"),
+      ) ||
+      (doc.cutIds || []).some((x) => x.startsWith(id + ":"))
     ) {
       notify(
-        "Dit stuk heeft gereed werk. Maak een nieuwe lijstversie via Opslaan als.",
+        "Dit stuk is al in bewerking. Gebruik Afwijken voor aanpassingen aan het resterende werk.",
       );
       return;
     }
@@ -196,9 +215,9 @@ function App() {
     setStep(0);
   }
   function updateProfile(id, key, value) {
-    if (doc.events.some((e) => e.kind === "good")) {
+    if (doc.events.some((e) => e.kind === "good") || doc.cutIds?.length) {
       notify(
-        "Er is al gereed werk. Maak een nieuwe lijstversie via Opslaan als.",
+        "Er is al gezaagd. Gebruik Afwijken of maak een kopie via Opslaan als.",
       );
       return;
     }
@@ -215,7 +234,7 @@ function App() {
   }
   function open(d) {
     if (dirty && !confirm("Onopgeslagen wijzigingen verlaten?")) return;
-    setDoc(d);
+    setDoc(withColors(d));
     setDirty(false);
     setStep(0);
     setDoneCuts({});
@@ -232,7 +251,7 @@ function App() {
       for (const e of incoming) {
         const piece = doc.pieces.find((p) => e.unit.startsWith(p.id + ":"));
         if (
-          e.signature === JSON.stringify(piece) &&
+          signatureMatches(e.signature, piece) &&
           !merged.some((x) => x.kind === "good" && x.unit === e.unit)
         )
           merged.push(e);
@@ -252,7 +271,16 @@ function App() {
     if (copy) {
       const name = prompt("Naam van de kopie", doc.name + " · kopie");
       if (!name) return;
-      d = { ...doc, id: uid(), name, events: [], revision: 1, cloudVersion: 0 };
+      d = {
+        ...doc,
+        id: uid(),
+        name,
+        events: [],
+        execution: null,
+        cutIds: [],
+        revision: 1,
+        cloudVersion: 0,
+      };
       setCloudVersion(0);
     }
     try {
@@ -408,20 +436,112 @@ function App() {
     e.preventDefault();
     accessLogin();
   }
+  function applyCuts(ends) {
+    change((d) => {
+      const ids = [
+        ...new Set([
+          ...(d.cutIds || []),
+          ...ends.map((e) => `${e.unit}:${e.end}`),
+        ]),
+      ];
+      let next = { ...d, execution: d.execution || calculated, cutIds: ids };
+      for (const unit of new Set(ends.map((e) => e.unit))) {
+        if (
+          ids.includes(`${unit}:links`) &&
+          ids.includes(`${unit}:rechts`) &&
+          !next.events.some((e) => e.kind === "good" && e.unit === unit)
+        )
+          next = recordGood(next, unit);
+      }
+      return next;
+    });
+    setStep(0);
+  }
   function cut() {
     if (!current) return;
-    const ids = [...(doc.cutIds || []), current.id];
-    const next = Object.fromEntries(ids.map((id) => [id, true]));
-    if (next[`${current.unit}:links`] && next[`${current.unit}:rechts`]) {
-      change((d) => ({ ...recordGood(d, current.unit), cutIds: ids }));
-      setStep(0);
-      notify(current.piece.code + " gereed gemeld");
-    } else {
-      change((d) => ({ ...d, cutIds: ids }));
-      setStep(0);
-      notify("Snede afgevinkt. Bewaar het stuk bij het juiste stuknummer.");
-    }
+    applyCuts(current.ends || [{ unit: current.unit, end: current.end }]);
+    notify(
+      current.shared
+        ? "Gedeelde snede geregistreerd voor beide stukken."
+        : "Snede geregistreerd.",
+    );
   }
+  function toggleGood(unit) {
+    const p = doc.pieces.find((p) => unit.startsWith(p.id + ":"));
+    const done = doc.events.some((e) => e.kind === "good" && e.unit === unit);
+    if (
+      !confirm(
+        done
+          ? `Stuk ${p.code} weer openzetten?`
+          : `Stuk ${p.code} gereed? Controleer profiel, lengte en beide hoeken.`,
+      )
+    )
+      return;
+    if (done) {
+      change((d) => ({
+        ...d,
+        events: d.events.filter((e) => !(e.kind === "good" && e.unit === unit)),
+        cutIds: (d.cutIds || []).filter((id) => !id.startsWith(unit + ":")),
+      }));
+      return;
+    }
+    const related = result.steps.filter((s) =>
+      (s.ends || [{ unit: s.unit }]).some((e) => e.unit === unit),
+    );
+    const ends = related.flatMap(
+      (s) => s.ends || [{ unit: s.unit, end: s.end }],
+    );
+    applyCuts([...ends, { unit, end: "links" }, { unit, end: "rechts" }]);
+    notify(p.code + " gereed gemeld.");
+  }
+  function showProgress() {
+    returnScroll.current = window.scrollY;
+    setProgressOpen(true);
+  }
+  function hideProgress() {
+    setProgressOpen(false);
+    requestAnimationFrame(() => window.scrollTo(0, returnScroll.current));
+  }
+  function touchStart(e) {
+    swipeRef.current = null;
+    if (!["plan", "work"].includes(tab) && !progressOpen) return;
+    const t = e.target;
+    if (t.closest("input,select,textarea,button,a,canvas")) return;
+    let parent = t;
+    while (parent && parent !== e.currentTarget) {
+      if (
+        parent.scrollWidth > parent.clientWidth + 2 &&
+        ["auto", "scroll"].includes(getComputedStyle(parent).overflowX)
+      )
+        return;
+      parent = parent.parentElement;
+    }
+    swipeRef.current = {
+      x: e.changedTouches[0].clientX,
+      y: e.changedTouches[0].clientY,
+    };
+  }
+  function touchEnd(e) {
+    const p = swipeRef.current;
+    swipeRef.current = null;
+    if (!p) return;
+    const dx = e.changedTouches[0].clientX - p.x,
+      dy = e.changedTouches[0].clientY - p.y;
+    if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.8) return;
+    e.preventDefault();
+    if (dx < 0 && !progressOpen) showProgress();
+    else if (dx > 0 && progressOpen) hideProgress();
+  }
+  useEffect(() => {
+    if (cloudVersion)
+      QRCode.toDataURL(location.origin + "/#project=" + doc.id, {
+        width: 140,
+        margin: 1,
+      })
+        .then(setPrintQr)
+        .catch(() => {});
+    else setPrintQr("");
+  }, [doc.id, cloudVersion]);
   useEffect(() => {
     localStorage.setItem("zaagerij:working", JSON.stringify(doc));
   }, [doc]);
@@ -461,7 +581,17 @@ function App() {
         ...d.pieces,
         {
           id: uid(),
-          code: "S" + String(d.pieces.length + 1).padStart(2, "0"),
+          color:
+            pieceColors.find((c) => !d.pieces.some((p) => p.color === c)) ||
+            pieceColors[d.pieces.length % pieceColors.length],
+          code: String(
+            Math.max(
+              0,
+              ...d.pieces.map(
+                (p) => Number(String(p.code).replace(/\D/g, "")) || 0,
+              ),
+            ) + 1,
+          ).padStart(3, "0"),
           profileId: d.profiles[0].id,
           length: 600,
           qty: 1,
@@ -472,7 +602,15 @@ function App() {
       ],
     }));
   return (
-    <div className="app-shell">
+    <div
+      className="app-shell"
+      data-tab={tab}
+      onTouchStart={touchStart}
+      onTouchEnd={touchEnd}
+      onTouchCancel={() => {
+        swipeRef.current = null;
+      }}
+    >
       <aside className="sidebar">
         <a
           href="https://avandervelden.nl/"
@@ -484,7 +622,7 @@ function App() {
         </a>
         <div className="product-name">
           <span className="product-mark">
-            <Scissors size={21} />
+            <img src="/brand/zaagerij-icon.svg" alt="" width="28" height="28" />
           </span>
           <span>
             Zaagerij <small>2.0</small>
@@ -602,6 +740,9 @@ function App() {
                   <Button primary icon={Save} onClick={() => persist()}>
                     Opslaan
                   </Button>
+                  <Button icon={Copy} onClick={() => persist(true)}>
+                    Opslaan als
+                  </Button>
                 </>
               )}
             </div>
@@ -634,6 +775,24 @@ function App() {
               >
                 <Settings2 size={20} />
               </button>
+            </div>
+          )}
+          {legacyPlan && ["plan", "work"].includes(tab) && (
+            <div className="notice">
+              Deze lijst heeft nog de oude zaagweergave. Vernieuw het resterende
+              plan voor de juiste hoek- en omkeerinstructies.
+              <Button
+                onClick={() => {
+                  if (
+                    doc.cutIds?.length ||
+                    doc.events.some((e) => e.kind === "good")
+                  )
+                    setModal({ kind: "deviate" });
+                  else change({ execution: null, cutIds: [] });
+                }}
+              >
+                Plan vernieuwen
+              </Button>
             </div>
           )}
           {tab === "projects" && (
@@ -750,12 +909,54 @@ function App() {
                   {doc.profiles.map((p) => (
                     <div className="profile-block" key={p.id}>
                       <div className="profile-fields">
-                        <Field label="Profiel / materiaal">
+                        <Field label="Materiaal">
+                          <select
+                            value={p.material || "Aluminium"}
+                            onChange={(e) =>
+                              updateProfile(p.id, "material", e.target.value)
+                            }
+                          >
+                            {["Aluminium", "Staal", "RVS"].map((m) => (
+                              <option key={m}>{m}</option>
+                            ))}
+                          </select>
+                        </Field>
+                        <Field label="Profielafmeting">
                           <input
                             value={p.name}
-                            onChange={(e) =>
-                              updateProfile(p.id, "name", e.target.value)
-                            }
+                            list={"profiles-" + p.id}
+                            onBlur={() => {
+                              rememberProfile(p);
+                              setLibrary(profileLibrary());
+                            }}
+                            onChange={(e) => {
+                              if (
+                                doc.events.some((e) => e.kind === "good") ||
+                                doc.cutIds?.length
+                              )
+                                return notify(
+                                  "Er is al gezaagd. Gebruik Afwijken voor het resterende werk.",
+                                );
+                              const picked = library.find(
+                                (x) =>
+                                  x.name === e.target.value &&
+                                  (x.material || "Aluminium") ===
+                                    (p.material || "Aluminium"),
+                              );
+                              if (picked) {
+                                change((d) => ({
+                                  ...d,
+                                  execution: null,
+                                  cutIds: [],
+                                  profiles: d.profiles.map((x) =>
+                                    x.id === p.id
+                                      ? { ...x, ...picked, id: p.id }
+                                      : x,
+                                  ),
+                                }));
+                              } else
+                                updateProfile(p.id, "name", e.target.value);
+                            }}
                           />
                         </Field>
                         <Field label="Handelslengtes (mm)">
@@ -790,6 +991,27 @@ function App() {
                           />
                         </Field>
                       </div>
+                      <datalist id={"profiles-" + p.id}>
+                        {library
+                          .filter(
+                            (x) =>
+                              (x.material || "Aluminium") ===
+                              (p.material || "Aluminium"),
+                          )
+                          .map((x, i) => (
+                            <option key={i} value={x.name} />
+                          ))}
+                      </datalist>
+                      <button
+                        className="text-button"
+                        onClick={() => {
+                          rememberProfile(p);
+                          setLibrary(profileLibrary());
+                          notify("Profiel bewaard in geheugen.");
+                        }}
+                      >
+                        Profiel onthouden
+                      </button>
                       <label className="toggle-line">
                         <input
                           type="checkbox"
@@ -831,6 +1053,39 @@ function App() {
                     <Plus size={16} /> Profiel toevoegen
                   </button>
                 </section>
+                <details className="card details advanced-options">
+                  <summary>
+                    Zaagopties{" "}
+                    <span>
+                      {doc.combine ? "Combineren aan" : "Losse sneden"}
+                    </span>
+                  </summary>
+                  <label className="toggle-line">
+                    <input
+                      type="checkbox"
+                      checked={!!doc.combine}
+                      onChange={(e) => {
+                        if (
+                          doc.cutIds?.length ||
+                          doc.events.some((x) => x.kind === "good")
+                        )
+                          return notify(
+                            "Er is al gezaagd. Gebruik Afwijken om het resterende werk te herplannen.",
+                          );
+                        change({
+                          combine: e.target.checked,
+                          execution: null,
+                          cutIds: [],
+                        });
+                      }}
+                    />
+                    Passende schuine sneden combineren
+                  </label>
+                  <p>
+                    Alleen evenwijdige snijvlakken in hetzelfde zaagvlak worden
+                    gecombineerd. Omkeren volgt de toestemming per profiel.
+                  </p>
+                </details>
                 <section className="card pieces-card">
                   <div className="section-heading">
                     <div>
@@ -841,9 +1096,6 @@ function App() {
                       </h2>
                       <p>Neem de maten en hoeken over van je tekening.</p>
                     </div>
-                    <Button icon={Plus} onClick={newPiece}>
-                      Stuk toevoegen
-                    </Button>
                   </div>
                   <div className="table-scroll">
                     <table className="pieces-table">
@@ -864,6 +1116,7 @@ function App() {
                             <tr>
                               <td data-label="Stuknummer">
                                 <input
+                                  style={{ background: colorFor(p, doc) }}
                                   aria-label="Stuknummer"
                                   value={p.code}
                                   onChange={(e) =>
@@ -934,6 +1187,38 @@ function App() {
                                       }
                                     >
                                       <Info size={14} />
+                                    </button>
+                                  </div>
+                                  <div className="angle-quick">
+                                    {[90, 45].map((a) => (
+                                      <button
+                                        key={a}
+                                        className={
+                                          +p[k] === a ? "selected" : ""
+                                        }
+                                        onClick={() => updatePiece(p.id, k, a)}
+                                      >
+                                        {a}°
+                                      </button>
+                                    ))}
+                                    <button
+                                      aria-label={
+                                        "Bereken " +
+                                        (k === "left"
+                                          ? "linkerhoek "
+                                          : "rechterhoek ") +
+                                        p.code
+                                      }
+                                      onClick={() =>
+                                        setModal({
+                                          kind: "calculator",
+                                          pieceId: p.id,
+                                          field: k,
+                                          initial: p[k],
+                                        })
+                                      }
+                                    >
+                                      <CalculatorIcon size={14} />
                                     </button>
                                   </div>
                                 </td>
@@ -1010,6 +1295,11 @@ function App() {
                       </div>
                     )}
                   </div>
+                  <div className="add-piece-bottom">
+                    <Button icon={Plus} onClick={newPiece}>
+                      Stuk toevoegen
+                    </Button>
+                  </div>
                   <div className="table-footer">
                     <span>
                       <Info size={14} /> 90° op tekening = 0° op de machine
@@ -1021,6 +1311,19 @@ function App() {
                   <summary>
                     Reststukken <span>{doc.remnants.length} beschikbaar</span>
                   </summary>
+                  <label className="toggle-line">
+                    <input
+                      type="checkbox"
+                      checked={doc.useRemnants !== false}
+                      onChange={(e) =>
+                        change({
+                          useRemnants: e.target.checked,
+                          execution: null,
+                        })
+                      }
+                    />
+                    Reststukken meenemen
+                  </label>
                   {doc.remnants.map((r) => (
                     <div className="remnant-row" key={r.id}>
                       <select
@@ -1148,11 +1451,17 @@ function App() {
                         onChange={(e) => change({ name: e.target.value })}
                       />
                     </Field>
+                    <Field label="Klantnaam">
+                      <input
+                        value={doc.customer || ""}
+                        onChange={(e) => change({ customer: e.target.value })}
+                      />
+                    </Field>
                     <Field label="Ordernummer">
                       <input
                         value={doc.order}
                         onChange={(e) => change({ order: e.target.value })}
-                        placeholder="Bijv. VDV-2026-014"
+                        placeholder="Bijv. 6026001-000"
                       />
                     </Field>
                     <Field label="Prioriteit">
@@ -1187,12 +1496,12 @@ function App() {
           )}
           {tab === "plan" && (
             <>
-              <div className="metrics">
+              <div className="metrics compact-metrics">
                 <Metric
                   value={result.bars.filter((b) => b.source === "new").length}
                   label="Nieuwe lengtes"
                 />
-                <Metric value={result.changes ?? 0} label="Hoekwisselingen" />
+
                 <Metric
                   value={
                     Math.round(
@@ -1211,11 +1520,23 @@ function App() {
                 </div>
               ) : (
                 <>
+                  <div className="print-header">
+                    <div>
+                      <h1>Zaaglijst · {doc.name}</h1>
+                      <p>
+                        Klant: {doc.customer || "—"} · Order: {doc.order || "—"}{" "}
+                        · Versie {cloudVersion || doc.revision}
+                      </p>
+                    </div>
+                    {printQr && <img src={printQr} alt="QR-code zaaglijst" />}
+                  </div>
                   <div className="plan-heading">
                     <div>
                       <h2>Lengte-indeling</h2>
                       <p>
-                        Volledige losse sneden · geen onbewezen verstekoverlap
+                        {doc.combine
+                          ? `${result.sharedCuts || 0} gedeelde sneden · ${Math.round(result.saved || 0)} mm bespaard`
+                          : "Tik op een stuk om het gereed te melden."}
                       </p>
                     </div>
                     <Button
@@ -1234,6 +1555,9 @@ function App() {
                     >
                       Start uitvoering
                     </Button>
+                    <Button icon={Printer} onClick={() => window.print()}>
+                      Print / PDF
+                    </Button>
                   </div>
                   {result.unplaced?.length > 0 && (
                     <div className="notice error">
@@ -1241,63 +1565,11 @@ function App() {
                       beschikbare lengtes. Pas de voorraad aan.
                     </div>
                   )}
-                  {result.bars.map((bar, i) => (
-                    <section className="card bar-card" key={bar.id}>
-                      <div className="section-heading">
-                        <div>
-                          <h2>
-                            Lengte {i + 1}{" "}
-                            <span className="badge">
-                              {bar.source === "rest"
-                                ? "Reststuk"
-                                : "Nieuwe staaf"}
-                            </span>
-                          </h2>
-                          <p>
-                            {
-                              doc.profiles.find((p) => p.id === bar.profileId)
-                                ?.name
-                            }
-                          </p>
-                        </div>
-                        <strong>{bar.capacity} mm</strong>
-                      </div>
-                      <div className="bar-visual">
-                        {bar.items.map((p, j) => (
-                          <div
-                            key={p.unit}
-                            style={{
-                              flex: p.required,
-                              background: ["#dbe9ff", "#e9e0fb", "#d7eee9"][
-                                j % 3
-                              ],
-                            }}
-                            title={`${p.code}: ${p.long} mm`}
-                          >
-                            <strong>{p.code}</strong>
-                            <span>{Math.round(p.long)}</span>
-                          </div>
-                        ))}
-                        <div
-                          className="bar-rest"
-                          style={{ flex: Math.max(0, bar.capacity - bar.used) }}
-                        >
-                          <span>
-                            Rest {Math.round(bar.capacity - bar.used)}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="bar-caption">
-                        <span>
-                          {bar.items.length} stukken · {Math.round(bar.used)} mm
-                          verbruikt inclusief zaagsneden
-                        </span>
-                        <span>
-                          {Math.round(bar.capacity - bar.used)} mm rest
-                        </span>
-                      </div>
-                    </section>
-                  ))}
+                  <PlanBars
+                    bars={result.bars}
+                    doc={doc}
+                    onToggle={toggleGood}
+                  />
                   {result.check?.ok && (
                     <div className="notice success">
                       <CheckCircle2 size={18} /> Aantallen en materiaalbalans
@@ -1316,6 +1588,7 @@ function App() {
           {tab === "work" && (
             <div className="work-layout">
               <section>
+                <PlanBars bars={result.bars} doc={doc} onToggle={toggleGood} />
                 <div className="work-progress">
                   <div>
                     <strong>
@@ -1338,95 +1611,139 @@ function App() {
                     Controleer eerst de invoer.
                   </div>
                 ) : current ? (
-                  <section className="card current-cut">
-                    <div className="section-heading">
-                      <span className="badge blue">HUIDIGE SNEDE</span>
+                  <details className="cut-details">
+                    <summary>
+                      Volgende snede: {current.piece.code} · {current.angle}°{" "}
                       <span>
-                        Stap {step + 1} / {result.steps.length}
+                        {current.shared
+                          ? "Gedeeld"
+                          : current.flip
+                            ? "Onderzijde boven"
+                            : "Bovenzijde boven"}
                       </span>
-                    </div>
-                    <div className="piece-code">{current.piece.code}</div>
-                    <div className="cut-length">
-                      {current.piece.length}
-                      <small>mm</small>
-                    </div>
-                    <p>
-                      {
-                        doc.profiles.find((p) => p.id === current.profileId)
-                          ?.name
-                      }
-                    </p>
-                    <AngleSketch
-                      left={current.piece.left}
-                      right={current.piece.right}
-                    />
-                    <div className="cut-angles">
-                      <div>
-                        <span>TEKENING · {current.end.toUpperCase()}</span>
-                        <strong>{current.angle}°</strong>
+                    </summary>
+                    <section className="card current-cut">
+                      <div className="section-heading">
+                        <span className="badge blue">HUIDIGE SNEDE</span>
+                        <span>
+                          Stap {step + 1} / {result.steps.length}
+                        </span>
                       </div>
-                      <ArrowRight size={23} />
-                      <div>
-                        <span>MACHINE</span>
-                        <strong>{current.machine}°</strong>
+                      <div className="piece-code">{current.piece.code}</div>
+                      <div className="cut-length">
+                        {current.piece.length}
+                        <small>mm</small>
                       </div>
-                    </div>
-                    {current.flip && (
-                      <div className="notice purple-notice">
-                        <RotateCcw size={22} />
-                        <strong>Materiaal omkeren — onderzijde boven</strong>
+                      <p>
+                        {
+                          doc.profiles.find((p) => p.id === current.profileId)
+                            ?.name
+                        }
+                      </p>
+                      <PieceShape
+                        piece={{
+                          ...current.piece,
+                          shape: undefined,
+                          flipped: !!current.piece.flipped !== !!current.flip,
+                        }}
+                        orientationLabel={
+                          current.flip
+                            ? "Onderzijde staaf boven"
+                            : "Bovenzijde staaf boven"
+                        }
+                        profile={doc.profiles.find(
+                          (p) => p.id === current.profileId,
+                        )}
+                        highlight={current.end}
+                      />
+                      {current.shared && (
+                        <div className="notice success">
+                          Eén gedeelde snede: {current.piece.code} rechts +{" "}
+                          {current.nextCode} links.
+                        </div>
+                      )}
+                      <div className="roll-instruction">
+                        <RotateCcw size={24} />
+                        <strong>
+                          {current.flip
+                            ? "Onderzijde van de oorspronkelijke staaf boven"
+                            : "Bovenzijde van de oorspronkelijke staaf boven"}
+                        </strong>
                       </div>
-                    )}
-                    {!doc.profiles.find((p) => p.id === current.profileId)
-                      ?.allowFlip &&
-                      current.end === "rechts" &&
-                      current.angle !== 90 && (
+                      <div className="cut-angles">
+                        <div>
+                          <span>TEKENING · {current.end.toUpperCase()}</span>
+                          <strong>{current.angle}°</strong>
+                        </div>
+                        <ArrowRight size={23} />
+                        <div>
+                          <span>MACHINE</span>
+                          <strong>{current.machine}°</strong>
+                        </div>
+                      </div>
+                      {current.flip && (
+                        <div className="notice purple-notice">
+                          <RotateCcw size={22} />
+                          <strong>
+                            Leg de onderzijde boven. Laat de voorkeursrichting
+                            van de zaag gelijk.
+                          </strong>
+                        </div>
+                      )}
+                      {current.reverseRequired && (
                         <div className="notice error">
                           Omkeren niet toegestaan: controleer de vereiste
                           zaagrichting vóór deze snede.
                         </div>
                       )}
-                    <div className="cut-context">
-                      Staaf{" "}
-                      {result.bars.findIndex((b) => b.id === current.barId) + 1}{" "}
-                      ·{" "}
-                      {current.piece.basis === "long"
-                        ? "Buitenste lange punten"
-                        : current.piece.basis === "short"
-                          ? "Korte punten"
-                          : "Hartmaat"}
-                    </div>
-                    <Button primary icon={Check} onClick={cut}>
-                      Snede gereed
-                    </Button>
-                    <div className="two-buttons">
+                      <div className="cut-context">
+                        Staaf{" "}
+                        {result.bars.findIndex((b) => b.id === current.barId) +
+                          1}{" "}
+                        ·{" "}
+                        {current.piece.basis === "long"
+                          ? "Buitenste lange punten"
+                          : current.piece.basis === "short"
+                            ? "Korte punten"
+                            : "Hartmaat"}
+                      </div>
                       <Button
-                        icon={RefreshCw}
-                        onClick={() => setModal({ kind: "deviate" })}
+                        primary
+                        icon={Check}
+                        disabled={legacyPlan}
+                        onClick={cut}
                       >
-                        Afwijken
+                        Snede gereed
                       </Button>
-                      <Button
-                        icon={RotateCcw}
-                        onClick={() => {
-                          if (!doc.events.length)
-                            return notify(
-                              "Nog geen registratie om terug te draaien.",
-                            );
-                          change((d) => ({
-                            ...d,
-                            events: d.events.slice(0, -1),
-                            cutIds: [],
-                            execution: null,
-                          }));
-                          setDoneCuts({});
-                          setStep(0);
-                        }}
-                      >
-                        Ongedaan
-                      </Button>
-                    </div>
-                  </section>
+                      <div className="two-buttons">
+                        <Button
+                          icon={RefreshCw}
+                          onClick={() => setModal({ kind: "deviate" })}
+                        >
+                          Afwijken
+                        </Button>
+                        <Button
+                          icon={RotateCcw}
+                          onClick={() => {
+                            if (!doc.events.length)
+                              return notify(
+                                "Nog geen registratie om terug te draaien.",
+                              );
+                            change((d) => ({
+                              ...d,
+                              events: d.events.slice(0, -1),
+                              cutIds: [],
+                              execution: null,
+                            }));
+                            setDoneCuts({});
+                            setStep(0);
+                          }}
+                        >
+                          Ongedaan
+                        </Button>
+                      </div>
+                    </section>
+                  </details>
                 ) : (
                   <section className="card empty">
                     <CheckCircle2 size={50} />
@@ -1448,7 +1765,12 @@ function App() {
                   ).length;
                   return (
                     <div key={p.id} className="progress-row">
-                      <span className="piece-tag">{p.code}</span>
+                      <span
+                        className="piece-tag"
+                        style={{ background: colorFor(p, doc) }}
+                      >
+                        {p.code}
+                      </span>
                       <div>
                         <strong>{p.length} mm</strong>
                         <span>
@@ -1485,6 +1807,21 @@ function App() {
           </footer>
         </main>
       </div>
+      {["plan", "work"].includes(tab) && !progressOpen && (
+        <button className="progress-peek" onClick={showProgress}>
+          <CheckCircle2 size={16} />
+          Gereedoverzicht · {completed}/{total}
+          <span>← veeg</span>
+        </button>
+      )}
+      {progressOpen && (
+        <ProgressOverview
+          doc={doc}
+          onBack={hideProgress}
+          onSave={() => persist()}
+          onSync={progressSync}
+        />
+      )}
       <nav className="bottom-nav">
         {tabs.map(([id, label, Icon]) => (
           <button
@@ -1563,6 +1900,15 @@ function App() {
                   )}
                 </div>
               </>
+            )}
+            {modal.kind === "calculator" && (
+              <Calculator
+                initial={modal.initial}
+                onUse={(value) => {
+                  updatePiece(modal.pieceId, modal.field, value);
+                  setModal(null);
+                }}
+              />
             )}
             {modal.kind === "save" && (
               <>
@@ -1688,6 +2034,41 @@ function App() {
                   openen.
                 </p>
                 <input readOnly value={modal.url} />
+                <div className="share-links">
+                  <a
+                    className="button"
+                    href={
+                      "https://wa.me/?text=" +
+                      encodeURIComponent(doc.name + " " + modal.url)
+                    }
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    WhatsApp
+                  </a>
+                  <a
+                    className="button"
+                    href={
+                      "mailto:?subject=" +
+                      encodeURIComponent("Zaaglijst " + doc.name) +
+                      "&body=" +
+                      encodeURIComponent(modal.url)
+                    }
+                  >
+                    E-mail
+                  </a>
+                  {navigator.share && (
+                    <Button
+                      onClick={() =>
+                        navigator
+                          .share({ title: doc.name, url: modal.url })
+                          .catch(() => {})
+                      }
+                    >
+                      Delen via telefoon
+                    </Button>
+                  )}
+                </div>
                 <Button
                   onClick={() =>
                     navigator.clipboard
@@ -1715,25 +2096,29 @@ function App() {
                   primary
                   onClick={() => {
                     const newer = pending.document;
-                    const conflicts = doc.events
-                      .filter((e) => e.kind === "good")
-                      .some((e) => {
-                        const old = doc.pieces.find((p) =>
-                            e.unit.startsWith(p.id + ":"),
-                          ),
-                          n = newer.pieces.find((p) => old && p.id === old.id);
-                        return (
-                          !n ||
-                          [
-                            "length",
-                            "left",
-                            "right",
-                            "profileId",
-                            "basis",
-                          ].some((k) => String(n[k]) !== String(old[k])) ||
-                          +e.unit.split(":").at(-1) >= +n.qty
-                        );
-                      });
+                    const conflicts =
+                      doc.id === newer.id &&
+                      doc.events
+                        .filter((e) => e.kind === "good")
+                        .some((e) => {
+                          const old = doc.pieces.find((p) =>
+                              e.unit.startsWith(p.id + ":"),
+                            ),
+                            n = newer.pieces.find(
+                              (p) => old && p.id === old.id,
+                            );
+                          return (
+                            !n ||
+                            [
+                              "length",
+                              "left",
+                              "right",
+                              "profileId",
+                              "basis",
+                            ].some((k) => String(n[k]) !== String(old[k])) ||
+                            +e.unit.split(":").at(-1) >= +n.qty
+                          );
+                        });
                     if (conflicts)
                       return notify(
                         "Deze versie wijzigt gereed werk. Overleg eerst met kantoor; niets is overgenomen.",

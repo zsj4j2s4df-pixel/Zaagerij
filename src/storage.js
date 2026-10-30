@@ -1,4 +1,14 @@
 import { uid } from "./engine";
+import { pieceColors } from "./geometry";
+export function withColors(doc) {
+  return {
+    ...doc,
+    pieces: (doc.pieces || []).map((p, i) => ({
+      ...p,
+      color: p.color || pieceColors[i % pieceColors.length],
+    })),
+  };
+}
 const KEY = "zaagerij:v2:projects";
 export function fresh() {
   const id = uid();
@@ -6,6 +16,8 @@ export function fresh() {
     id: uid(),
     name: "Nieuwe zaaglijst",
     order: "",
+    customer: "",
+    combine: false,
     revision: 1,
     priority: "time",
     startAngle: 90,
@@ -13,7 +25,8 @@ export function fresh() {
     profiles: [
       {
         id,
-        name: "Aluminium koker 60 × 40 × 3",
+        name: "Koker 60 × 40 × 3",
+        material: "Aluminium",
         width: 60,
         kerf: 3,
         stocks: [6000],
@@ -37,7 +50,8 @@ export function demo() {
     pieces: [
       {
         id: uid(),
-        code: "A01",
+        code: "001",
+        color: pieceColors[0],
         profileId: p,
         length: 1200,
         qty: 4,
@@ -47,7 +61,8 @@ export function demo() {
       },
       {
         id: uid(),
-        code: "A02",
+        code: "002",
+        color: pieceColors[1],
         profileId: p,
         length: 850,
         qty: 2,
@@ -57,7 +72,8 @@ export function demo() {
       },
       {
         id: uid(),
-        code: "A03",
+        code: "003",
+        color: pieceColors[2],
         profileId: p,
         length: 600,
         qty: 6,
@@ -106,6 +122,8 @@ export function convert(old) {
     name:
       old.meta?.omschrijving || old.meta?.tekenNr || "Geïmporteerde zaaglijst",
     profiles,
+    customer: old.meta?.klantNaam || "",
+    order: old.meta?.orderNr || "",
     pieces: (old.pieces || [])
       .filter((p) => +p.length > 0)
       .map((p, i) => ({
@@ -163,4 +181,24 @@ export async function fileGet(id) {
     };
     r.onerror = () => reject(r.error);
   });
+}
+export function profileLibrary() {
+  try {
+    return JSON.parse(
+      localStorage.getItem("zaagerij:profiles") ||
+        localStorage.getItem("proflib") ||
+        "[]",
+    );
+  } catch {
+    return [];
+  }
+}
+export function rememberProfile(profile) {
+  if (!profile.name?.trim()) return;
+  const key = (p) => `${p.material || ""}:${p.name}`.toLowerCase();
+  const all = profileLibrary().filter((p) => key(p) !== key(profile));
+  localStorage.setItem(
+    "zaagerij:profiles",
+    JSON.stringify([{ ...profile }, ...all].slice(0, 100)),
+  );
 }

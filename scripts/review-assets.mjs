@@ -26,9 +26,12 @@ for (const size of [180, 192, 512]) {
   }, size);
   await writeFile(`public/icon-v2-${size}.png`, Buffer.from(data, "base64"));
 }
+await page.locator(".advanced-options summary").click();
+await page.getByLabel("Passende schuine sneden combineren").check();
+await page.locator(".advanced-options summary").click();
 async function capture(name) {
   await page.evaluate(() => document.fonts.ready);
-  await page.screenshot({ path: `public/review-screens/${name}.png` });
+  await page.screenshot({ path: `public/review-screens-r2/${name}.png` });
 }
 await page.evaluate(() => scrollTo(0, 0));
 await capture("invoer");
@@ -44,10 +47,9 @@ await page.getByRole("button", { name: "Bekijk zaagplan" }).click();
 await page.evaluate(() => scrollTo(0, 0));
 await capture("zaagplan");
 await page.getByRole("button", { name: "Start uitvoering" }).click();
-await page
-  .getByText("HUIDIGE SNEDE")
-  .evaluate((e) => e.scrollIntoView({ block: "start" }));
+await page.evaluate(() => scrollTo(0, 0));
 await capture("uitvoering");
+await page.locator(".cut-details summary").click();
 await page.getByRole("button", { name: "Afwijken", exact: true }).click();
 await capture("afwijken");
 await page.getByRole("button", { name: "Sluiten", exact: true }).click();

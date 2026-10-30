@@ -1,3 +1,4 @@
+import { pieceSignature } from "./engine";
 export async function api(path, options = {}) {
   let response;
   try {
@@ -52,7 +53,7 @@ export async function syncProgress(doc) {
     .filter((e) => e.kind === "good")
     .map((e) => ({
       ...e,
-      signature: JSON.stringify(
+      signature: pieceSignature(
         doc.pieces.find((p) => e.unit.startsWith(p.id + ":")),
       ),
     }));

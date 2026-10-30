@@ -1,3 +1,4 @@
+import { signatureMatches } from "../../../../src/engine.js";
 import { json, bodyJson } from "../../../_lib/security.js";
 export async function onRequestPost({ request, env, params, data }) {
   const { events, version } = await bodyJson(request);
@@ -31,7 +32,7 @@ export async function onRequestPost({ request, env, params, data }) {
       !Number.isInteger(i) ||
       i < 0 ||
       i >= +piece.qty ||
-      event.signature !== JSON.stringify(piece)
+      !signatureMatches(event.signature, piece)
     )
       return json(
         { error: "Stukgegevens zijn veranderd. Controleer de kantoorversie." },

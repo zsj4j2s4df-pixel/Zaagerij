@@ -26,6 +26,7 @@ test("mobile execution persists individual cuts and confirms removal", async ({
   await page.goto("/");
   await page.getByRole("button", { name: "Bekijk zaagplan" }).click();
   await page.getByRole("button", { name: "Start uitvoering" }).click();
+  await page.locator(".cut-details summary").click();
   await expect(page.getByText("HUIDIGE SNEDE")).toBeVisible();
   await page.getByRole("button", { name: "Snede gereed" }).click();
   await page.reload();
@@ -48,9 +49,9 @@ test("mobile execution persists individual cuts and confirms removal", async ({
     .click();
   page.once("dialog", (d) => d.dismiss());
   await page
-    .getByRole("button", { name: "Verwijder stuk A01", exact: true })
+    .getByRole("button", { name: "Verwijder stuk 001", exact: true })
     .click();
-  await expect(page.getByLabel("Aantal A01", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Aantal 001", { exact: true })).toBeVisible();
 });
 test("attachment is visibly present after choosing an image", async ({
   page,

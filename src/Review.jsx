@@ -21,7 +21,11 @@ const screens = [
   ["opslaan", "Opslaan"],
   ["inloggen", "Inloggen"],
 ];
-const KEY = "zaagerij:review:2026-10-30";
+const oldRound = new URLSearchParams(location.search).get("round") === "1";
+const KEY = oldRound
+  ? "zaagerij:review:2026-10-30"
+  : "zaagerij:review:2026-10-30-r2";
+const screenPath = oldRound ? "/review-screens/" : "/review-screens-r2/";
 const empty = () => ({ strokes: [], comment: "", pins: [] });
 function paint(canvas, image, strokes, pins = []) {
   const ctx = canvas.getContext("2d");
@@ -177,7 +181,7 @@ export default function Review() {
         "beoordeling.json",
         JSON.stringify(
           {
-            version: "2026-10-30",
+            version: oldRound ? "2026-10-30" : "2026-10-30-r2",
             savedAt: new Date().toISOString(),
             screens,
             notes,
@@ -198,7 +202,7 @@ export default function Review() {
           image.onload = () => resolve(image);
           image.onerror = () =>
             reject(Error("Schermvoorbeeld kon niet geladen worden."));
-          image.src = "/review-screens/" + k + ".png";
+          image.src = screenPath + k + ".png";
         });
         const out = document.createElement("canvas");
         out.width = image.naturalWidth;
@@ -234,7 +238,18 @@ export default function Review() {
             <img src="/brand/van-der-velden.svg" alt="Van der Velden" />
           </a>
           <h1>Bekijk. Tik. Geef je mening.</h1>
-          <p>Schermvoorbeelden · 30 oktober 2026 · alleen voorbeeldgegevens</p>
+          <p>
+            Schermvoorbeelden · {oldRound ? "Eerste ronde" : "Tweede ronde"} ·
+            alleen voorbeeldgegevens
+          </p>
+          <a
+            className="review-round"
+            href={oldRound ? "/review/" : "/review/?round=1"}
+          >
+            {oldRound
+              ? "Naar de nieuwste schermen"
+              : "Eerste beoordeling terugzien"}
+          </a>
         </div>
         <a className="button" href="/" target="_blank" rel="noreferrer">
           <ExternalLink size={16} />
@@ -251,6 +266,7 @@ export default function Review() {
             Bekijken
           </button>
           <button
+            disabled={!ready}
             className={mode === "draw" ? "selected" : ""}
             onClick={() => setMode("draw")}
           >
@@ -258,6 +274,7 @@ export default function Review() {
             Tekenen
           </button>
           <button
+            disabled={!ready}
             className={mode === "pin" ? "selected" : ""}
             onClick={() => setMode("pin")}
           >
@@ -329,7 +346,7 @@ export default function Review() {
         >
           <img
             ref={img}
-            src={"/review-screens/" + id + ".png"}
+            src={screenPath + id + ".png"}
             alt={"Voorbeeldscherm " + title}
             onLoad={() => {
               canvas.current.width = img.current.naturalWidth;
