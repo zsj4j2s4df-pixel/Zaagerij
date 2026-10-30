@@ -40,3 +40,22 @@ Daarom: de staafverdeling staat tegen rechts uitgelijnd, het ongebruikte restant
 - SolidPilot: https://github.com/eyfel/mcp-server-solidworks (SolidWorks 2026 SP3 als doel; native SLDDRW-reader wordt als test/reference beschreven, DXF/DWG-reader uitgebreider).
 - CAKE: https://github.com/luckyman9487/CAKE
 - FreeCAD-vormanalyse: https://github.com/theosib/FreeCAD-MCP-Server
+
+### Hoekbetekenis en vaste berekening
+
+De herkenner onderscheidt per uiteinde een zaaghoek t.o.v. de lengteas,
+een machine-instelling vanuit recht, een binnenhoek en een richtingsverandering.
+Alleen bij aantoonbaar symmetrisch verstek mag de server een verbindingshoek
+verdelen. Binnenhoek 135° en richtingsverandering 45° leveren beide machine
+22,5° en tekeningszaaghoek 67,5°. Een stompe haakse aansluiting heeft juist
+zaaghoek 90° en machine 0°. De eerder uitgesproken 51° was een
+spraakmisverstand en vormt geen projectgegeven.
+
+De server herberekent hoekwaarden uit deze classificatie; onduidelijke
+verbindingen blijven leeg. De controleweergave toont de gebruikte hoek en formule.
+Dit voorkomt rekenfouten na de classificatie, maar bewijst niet dat de AI de
+verbinding goed heeft herkend. Samenstellingslengtes mogen alleen uit sluitende
+maatketens worden afgeleid, met uitleg in de notitie. Een onafhankelijke
+algemene oplosser voor samenstellingsgeometrie en genummerde beeldsegmentatie
+zijn hiermee nog niet gerealiseerd. Praktijkvalidatie met de twee ingestuurde
+foto's via de echte API staat nog open.

@@ -24,6 +24,14 @@ const source = object({
   text: { type: ["string", "null"] },
   bbox: { type: ["array", "null"], items: { type: "number" } },
 });
+const joint = object({
+  kind: {
+    type: "string",
+    enum: ["cut", "machine", "inside", "turn", "unknown"],
+  },
+  angle: { type: ["number", "null"] },
+  symmetric: { type: "boolean" },
+});
 export const drawingSchema = object({
   complete: { type: "boolean" },
   warnings: { type: "array", items: { type: "string" } },
@@ -39,6 +47,7 @@ export const drawingSchema = object({
       profileName: { type: "string" },
       material: { type: "string" },
       note: { type: "string" },
+      joints: object({ left: joint, right: joint }),
       sources: object(
         Object.fromEntries(drawingFields.map((k) => [k, source])),
       ),
@@ -57,6 +66,17 @@ export function validateDrawingResult(result) {
   return result.pieces.every(
     (p) =>
       p &&
+      (p.joints === undefined ||
+        ["left", "right"].every((end) => {
+          const j = p.joints?.[end];
+          return (
+            j &&
+            ["cut", "machine", "inside", "turn", "unknown"].includes(j.kind) &&
+            (j.angle === null ||
+              (typeof j.angle === "number" && Number.isFinite(j.angle))) &&
+            typeof j.symmetric === "boolean"
+          );
+        })) &&
       typeof p.code === "string" &&
       typeof p.note === "string" &&
       typeof p.profileName === "string" &&

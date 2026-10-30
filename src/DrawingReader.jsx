@@ -217,6 +217,19 @@ export default function DrawingReader({
                   <option value="center">Hartmaat</option>
                 </select>
               </label>
+              {Object.entries(p.angleCalculations || {}).map(
+                ([end, calc]) =>
+                  calc && (
+                    <p className="notice" key={end}>
+                      {end === "left" ? "Links" : "Rechts"}: tekeningshoek{" "}
+                      {p[end]}° · machine {Math.abs(90 - p[end])}°.
+                      {calc.kind === "inside" &&
+                        ` Binnenhoek ${calc.angle}°: (180 − ${calc.angle}) ÷ 2 = ${calc.machine}° op de machine.`}
+                      {calc.kind === "turn" &&
+                        ` Richtingsverandering ${calc.angle}° ÷ 2 = ${calc.machine}° op de machine.`}
+                    </p>
+                  ),
+              )}
               <p>{p.note}</p>
               <label className="toggle-line">
                 <input
