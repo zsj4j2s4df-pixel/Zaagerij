@@ -108,7 +108,7 @@ test("text comments can point to a specific place and persist", async ({
     page.getByRole("button", { name: "Opmerking 1: Deze maat groter tonen." }),
   ).toBeVisible();
   const stored = await page.evaluate(() =>
-    JSON.parse(localStorage.getItem("zaagerij:review:2026-10-30-r2")),
+    JSON.parse(localStorage.getItem("zaagerij:review:2026-10-30-r3")),
   );
   expect(stored.invoer.pins[0].x).toBeGreaterThan(0);
   expect(stored.invoer.pins[0].y).toBeGreaterThan(0);

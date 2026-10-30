@@ -100,6 +100,12 @@ export function PieceShape({ piece, profile, highlight, orientationLabel }) {
           stroke="#e86436"
           strokeWidth="3"
         />
+        <circle
+          cx={10 + (Math.max(s.rt, s.rb) / L) * 340}
+          cy={s.rt >= s.rb ? 12 : 75}
+          r="4"
+          fill="#d65d33"
+        />
         <text
           x="180"
           y="45"
@@ -129,7 +135,8 @@ export function PieceShape({ piece, profile, highlight, orientationLabel }) {
 function OneBar({ bar, doc, done, onToggle, index }) {
   const [detail, setDetail] = useState(false);
   const width = bar.capacity || 1,
-    xscale = 360 / width;
+    xscale = 360 / width,
+    offset = width - bar.used;
   const fallback = bar.items.map((p, i) => {
     const start = bar.items.slice(0, i).reduce((n, x) => n + x.required, 0);
     return {
@@ -158,6 +165,10 @@ function OneBar({ bar, doc, done, onToggle, index }) {
         </div>
         <strong>{bar.capacity} mm</strong>
       </div>
+      <div className="machine-axis">
+        <span>Aanvoer links →</span>
+        <strong>Aanslag rechts ⊣</strong>
+      </div>
       <div className="saw-bar-wrap">
         <svg
           viewBox="0 0 360 115"
@@ -165,9 +176,15 @@ function OneBar({ bar, doc, done, onToggle, index }) {
           role="img"
           aria-label={"Zaagindeling lengte " + index}
         >
+          <rect
+            x="0"
+            y="12"
+            width={Math.max(0, offset * xscale)}
+            height="68"
+            fill="#f0f3f8"
+          />
           {fallback.map((p) => {
             const s = p.shape,
-              scale = 80 / (s.width || 1),
               top = 12,
               bottom = 80;
             const finished = done.has(p.unit);
@@ -186,13 +203,13 @@ function OneBar({ bar, doc, done, onToggle, index }) {
                 }}
               >
                 <polygon
-                  points={`${(p.start + s.lt) * xscale},${top} ${(p.start + s.rt) * xscale},${top} ${(p.start + s.rb) * xscale},${bottom} ${(p.start + s.lb) * xscale},${bottom}`}
+                  points={`${(offset + p.start + s.lt) * xscale},${top} ${(offset + p.start + s.rt) * xscale},${top} ${(offset + p.start + s.rb) * xscale},${bottom} ${(offset + p.start + s.lb) * xscale},${bottom}`}
                   fill={finished ? "#bde8c9" : colorFor(p, doc)}
                   stroke={p.shared ? "#28835e" : "#8a9cb5"}
                   strokeWidth="1"
                 />
                 <text
-                  x={(p.start + p.long / 2) * xscale}
+                  x={(offset + p.start + p.long / 2) * xscale}
                   y="39"
                   textAnchor="middle"
                   fontSize="12"
@@ -202,20 +219,20 @@ function OneBar({ bar, doc, done, onToggle, index }) {
                   {finished ? " ✓" : ""}
                 </text>
                 <text
-                  x={(p.start + p.long / 2) * xscale}
+                  x={(offset + p.start + p.long / 2) * xscale}
                   y="62"
                   textAnchor="middle"
                   fontSize="9"
                   fill="#5a6e8a"
                 >
-                  {p.length}
+                  {Math.round(p.long * 1000) / 1000}
                   {p.flipped ? " ↻" : ""}
                 </text>
                 {p.shared && (
                   <line
-                    x1={(p.start + s.lt) * xscale}
+                    x1={(offset + p.start + s.lt) * xscale}
                     y1={top - 4}
-                    x2={(p.start + s.lb) * xscale}
+                    x2={(offset + p.start + s.lb) * xscale}
                     y2={bottom + 4}
                     stroke="#16845d"
                     strokeWidth="2"
@@ -225,7 +242,7 @@ function OneBar({ bar, doc, done, onToggle, index }) {
             );
           })}
           <text
-            x={Math.min(310, Math.max(50, bar.used * xscale))}
+            x={Math.max(35, (offset * xscale) / 2)}
             y="107"
             textAnchor="middle"
             fontSize="9"
@@ -233,10 +250,18 @@ function OneBar({ bar, doc, done, onToggle, index }) {
           >
             Rest {Math.round(width - bar.used)} mm
           </text>
+          <path
+            d="M358,5 V89 M347,5 H358 M347,89 H358"
+            fill="none"
+            stroke="#3b5271"
+            strokeWidth="3"
+          />
         </svg>
       </div>
       <div className="bar-caption">
-        <span>Tik op een stuk om het gereed te melden.</span>
+        <span>
+          Begin rechts bij {bar.items.at(-1)?.code}. Tik om af te vinken.
+        </span>
         <button className="text-button" onClick={() => setDetail((v) => !v)}>
           {detail ? "Details sluiten" : "Hoeken & omkeren"}{" "}
           {detail ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -255,7 +280,9 @@ function OneBar({ bar, doc, done, onToggle, index }) {
                 {done.has(p.unit) ? " ✓" : ""}
               </button>
               <div>
-                <strong>{p.length} mm</strong>
+                <strong>
+                  Aanslagmaat {Math.round(p.long * 1000) / 1000} mm
+                </strong>
                 <PieceShape
                   piece={p}
                   profile={doc.profiles.find((x) => x.id === bar.profileId)}

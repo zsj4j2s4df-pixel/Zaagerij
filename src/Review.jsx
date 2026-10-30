@@ -21,11 +21,11 @@ const screens = [
   ["opslaan", "Opslaan"],
   ["inloggen", "Inloggen"],
 ];
-const oldRound = new URLSearchParams(location.search).get("round") === "1";
-const KEY = oldRound
-  ? "zaagerij:review:2026-10-30"
-  : "zaagerij:review:2026-10-30-r2";
-const screenPath = oldRound ? "/review-screens/" : "/review-screens-r2/";
+const roundParam = new URLSearchParams(location.search).get("round");
+const round = ["1", "2"].includes(roundParam) ? Number(roundParam) : 3;
+const oldRound = round === 1;
+const KEY = "zaagerij:review:2026-10-30" + (oldRound ? "" : "-r" + round);
+const screenPath = oldRound ? "/review-screens/" : `/review-screens-r${round}/`;
 const empty = () => ({ strokes: [], comment: "", pins: [] });
 function paint(canvas, image, strokes, pins = []) {
   const ctx = canvas.getContext("2d");
@@ -181,7 +181,7 @@ export default function Review() {
         "beoordeling.json",
         JSON.stringify(
           {
-            version: oldRound ? "2026-10-30" : "2026-10-30-r2",
+            version: "2026-10-30" + (oldRound ? "" : "-r" + round),
             savedAt: new Date().toISOString(),
             screens,
             notes,
@@ -239,8 +239,13 @@ export default function Review() {
           </a>
           <h1>Bekijk. Tik. Geef je mening.</h1>
           <p>
-            Schermvoorbeelden · {oldRound ? "Eerste ronde" : "Tweede ronde"} ·
-            alleen voorbeeldgegevens
+            Schermvoorbeelden ·{" "}
+            {round === 1
+              ? "Eerste ronde"
+              : round === 2
+                ? "Tweede ronde"
+                : "Derde ronde"}{" "}
+            · alleen voorbeeldgegevens
           </p>
           <a
             className="review-round"
@@ -249,6 +254,13 @@ export default function Review() {
             {oldRound
               ? "Naar de nieuwste schermen"
               : "Eerste beoordeling terugzien"}
+          </a>
+          <a
+            className="review-round"
+            href="/review/?round=2"
+            style={{ marginLeft: 12 }}
+          >
+            Tweede beoordeling terugzien
           </a>
         </div>
         <a className="button" href="/" target="_blank" rel="noreferrer">

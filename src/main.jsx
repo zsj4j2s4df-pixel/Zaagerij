@@ -70,6 +70,7 @@ import {
 } from "./cloud";
 import "./style.css";
 import Review from "./Review";
+import DrawingReader from "./DrawingReader";
 import { Calculator, PlanBars, PieceShape, ProgressOverview } from "./SawTools";
 import { colorFor, pieceColors } from "./geometry";
 const tabs = [
@@ -170,7 +171,7 @@ function App() {
     swipeRef = useRef(null),
     returnScroll = useRef(0);
   const calculated = useMemo(() => plan(doc), [doc]);
-  const legacyPlan = !!doc.execution && doc.execution.model !== "planar-v2";
+  const legacyPlan = !!doc.execution && doc.execution.model !== "right-stop-v3";
   const result = doc.execution
     ? {
         ...doc.execution,
@@ -1534,6 +1535,9 @@ function App() {
                     <div>
                       <h2>Lengte-indeling</h2>
                       <p>
+                        Aanvoer links → · aanslag rechts · lange punt als maat
+                      </p>
+                      <p>
                         {doc.combine
                           ? `${result.sharedCuts || 0} gedeelde sneden · ${Math.round(result.saved || 0)} mm bespaard`
                           : "Tik op een stuk om het gereed te melden."}
@@ -1630,8 +1634,13 @@ function App() {
                         </span>
                       </div>
                       <div className="piece-code">{current.piece.code}</div>
+                      <p>
+                        {current.end === "rechts"
+                          ? "Rechter uiteinde voorbereiden; daarna links op maat"
+                          : "Aanslagmaat · buitenste lange punten"}
+                      </p>
                       <div className="cut-length">
-                        {current.piece.length}
+                        {Math.round(current.piece.long * 1000) / 1000}
                         <small>mm</small>
                       </div>
                       <p>
@@ -1658,8 +1667,8 @@ function App() {
                       />
                       {current.shared && (
                         <div className="notice success">
-                          Eén gedeelde snede: {current.piece.code} rechts +{" "}
-                          {current.nextCode} links.
+                          Eén gedeelde snede: {current.piece.code} links +{" "}
+                          {current.nextCode} rechts.
                         </div>
                       )}
                       <div className="roll-instruction">
@@ -2170,19 +2179,35 @@ function App() {
                     SolidWorks-herkenning is nog niet aangesloten.
                   </p>
                 ) : (
-                  <AIReader
+                  <DrawingReader
                     attachment={modal.attachment}
+                    attachments={doc.attachments}
+                    projectId={doc.id}
+                    profiles={doc.profiles}
                     session={session}
                     onApply={(pieces) => {
+                      if (
+                        doc.events.some((e) => e.kind === "good") ||
+                        doc.cutIds?.length
+                      ) {
+                        notify(
+                          "Er wordt al gezaagd. Maak eerst een kopie via Opslaan als om nieuwe stukken toe te voegen.",
+                        );
+                        return;
+                      }
                       change((d) => ({
                         ...d,
+                        execution: null,
+                        cutIds: [],
                         pieces: [
                           ...d.pieces,
-                          ...pieces.map((p) => ({
+                          ...pieces.map((p, i) => ({
                             ...p,
                             id: uid(),
-                            profileId: d.profiles[0].id,
-                            basis: "long",
+                            color:
+                              pieceColors[
+                                (d.pieces.length + i) % pieceColors.length
+                              ],
                           })),
                         ],
                       }));
@@ -2376,111 +2401,6 @@ function Deviation({ doc, onGood, onWaste, onReplan }) {
         Meet de rest opnieuw. De app leidt een resterende lengte niet af uit
         alleen het gekozen stuk.
       </p>
-    </>
-  );
-}
-function AIReader({ attachment, session, onApply }) {
-  const [busy, setBusy] = useState(false),
-    [error, setError] = useState(""),
-    [pieces, setPieces] = useState(null),
-    [checked, setChecked] = useState(false);
-  async function read() {
-    setBusy(true);
-    setError("");
-    try {
-      if (!session)
-        throw Error("Log eerst in om de beveiligde herkenning te gebruiken.");
-      const f = await fileGet(attachment.id);
-      if (!f) throw Error("Bijlage ontbreekt op dit apparaat.");
-      const data = await new Promise((resolve, reject) => {
-        const r = new FileReader();
-        r.onload = () => resolve(r.result);
-        r.onerror = reject;
-        r.readAsDataURL(f);
-      });
-      const response = await fetch("/api/recognize", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ name: f.name, type: f.type, data }),
-      });
-      const result = await response.json();
-      if (!response.ok) throw Error(result.error || "Uitlezen mislukt.");
-      setPieces(result.pieces);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <>
-      <p>
-        Herkenning stelt stuknummers, maten, aantallen en hoeken voor.
-        Controleer iedere regel tegen de tekening.
-      </p>
-      <Button primary disabled={busy} onClick={read}>
-        {busy ? "Tekening wordt uitgelezen…" : "Lees tekening uit"}
-      </Button>
-      {error && <div className="notice error">{error}</div>}
-      {pieces && (
-        <>
-          <div className="notice">
-            Controleer ook het profiel, de maatbasis en alle onzekere waarden.
-            Regels zonder volledige maten worden niet toegevoegd.
-          </div>
-          {pieces.map((p, i) => (
-            <div className="ai-row" key={i}>
-              <strong>{p.code}</strong>
-              {["length", "qty", "left", "right"].map((k) => (
-                <input
-                  key={k}
-                  aria-label={k}
-                  type="number"
-                  value={p[k] ?? ""}
-                  onChange={(e) =>
-                    setPieces((a) =>
-                      a.map((x, j) =>
-                        i === j ? { ...x, [k]: +e.target.value } : x,
-                      ),
-                    )
-                  }
-                />
-              ))}
-              <small>{p.note}</small>
-            </div>
-          ))}
-          <label className="toggle-line">
-            <input
-              type="checkbox"
-              checked={checked}
-              onChange={(e) => setChecked(e.target.checked)}
-            />
-            Ik heb alle regels met de tekening gecontroleerd.
-          </label>
-          <Button
-            disabled={
-              !checked ||
-              pieces.some(
-                (p) =>
-                  !p.length ||
-                  !Number.isInteger(p.qty) ||
-                  p.qty < 1 ||
-                  !Number.isFinite(p.left) ||
-                  !Number.isFinite(p.right) ||
-                  p.left < 15 ||
-                  p.right < 15 ||
-                  p.left > 165 ||
-                  p.right > 165,
-              )
-            }
-            onClick={() => onApply(pieces)}
-          >
-            Gecontroleerde regels toevoegen
-          </Button>
-        </>
-      )}
     </>
   );
 }

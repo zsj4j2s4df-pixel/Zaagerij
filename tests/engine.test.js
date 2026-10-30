@@ -111,7 +111,9 @@ test("time scheduling respects physical order within each bar", () => {
     const order = p.steps.filter((s) => s.barId === b.id);
     assert.deepEqual(
       order.map((s) => s.id),
-      b.items.flatMap((x) => [x.unit + ":links", x.unit + ":rechts"]),
+      [...b.items]
+        .reverse()
+        .flatMap((x) => [x.unit + ":rechts", x.unit + ":links"]),
     );
   }
 });

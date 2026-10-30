@@ -2280,3 +2280,93 @@ main {
   display: inline-block;
   margin-top: 8px;
 }
+.machine-axis {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 10px;
+  color: #8394a9;
+  margin: 0 0 5px;
+}
+.machine-axis strong {
+  color: #466a99;
+  font-weight: 600;
+}
+.machine-axis span {
+  white-space: nowrap;
+}
+.drawing-reader > .field {
+  margin: 17px 0;
+}
+.drawing-reader > .button {
+  margin-top: 15px;
+}
+.drawing-row {
+  border: 1px solid #dbe4f0;
+  border-radius: 9px;
+  padding: 15px;
+  margin: 17px 0;
+  background: #fafcfe;
+}
+.drawing-row h3 {
+  margin: 0 0 7px;
+}
+.drawing-row .field {
+  margin: 12px 0;
+}
+.drawing-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.drawing-fields .field {
+  margin-bottom: 5px;
+}
+.source-button {
+  border: 0;
+  border-radius: 4px;
+  background: #eaf5ee;
+  color: #438461;
+  font-size: 10px;
+  padding: 6px;
+  min-height: 32px;
+}
+.source-button.inferred {
+  background: #fff1df;
+  color: #a76b24;
+}
+.source-button.missing {
+  background: #edf0f5;
+  color: #8e9cad;
+}
+.drawing-source {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  padding: 16px;
+  background: white;
+  border: 2px solid #81aee3;
+  border-radius: 9px;
+  box-shadow: 0 -5px 25px #23416322;
+  max-height: 65dvh;
+  overflow: auto;
+  font-size: 12px;
+}
+.drawing-source p {
+  margin: 8px 0;
+}
+.source-image {
+  position: relative;
+  line-height: 0;
+}
+.source-image img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.source-image span {
+  position: absolute;
+  border: 2px solid #ed673c;
+  background: #ed673c22;
+  pointer-events: none;
+}

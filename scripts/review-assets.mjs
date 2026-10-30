@@ -31,7 +31,7 @@ await page.getByLabel("Passende schuine sneden combineren").check();
 await page.locator(".advanced-options summary").click();
 async function capture(name) {
   await page.evaluate(() => document.fonts.ready);
-  await page.screenshot({ path: `public/review-screens-r2/${name}.png` });
+  await page.screenshot({ path: `public/review-screens-r3/${name}.png` });
 }
 await page.evaluate(() => scrollTo(0, 0));
 await capture("invoer");

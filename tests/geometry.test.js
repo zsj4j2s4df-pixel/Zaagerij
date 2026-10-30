@@ -47,8 +47,8 @@ test("45 degree nesting uses alternate real orientation and one shared plane", (
   assert.equal(p.check.ok, true);
   const cut = p.steps.find((s) => s.shared);
   assert.equal(cut.ends.length, 2);
-  assert.equal(cut.ends[0].end, "rechts");
-  assert.equal(cut.ends[1].end, "links");
+  assert.equal(cut.ends[0].end, "links");
+  assert.equal(cut.ends[1].end, "rechts");
 });
 test("disallowing roll prevents false 45 degree matching", () => {
   const d = doc();
@@ -138,4 +138,16 @@ test("planar combinations remain consistent across acute, square and obtuse inpu
         assert.equal(p.steps.length, p.total * 2 - p.sharedCuts);
         assert.ok(p.bars.every((b) => b.used <= b.capacity + 1e-6));
       }
+});
+
+test("right-hand stop processes stock from the right and prepares the right end first", () => {
+  const d = doc(),
+    p = plan(d);
+  for (const bar of p.bars) {
+    const steps = p.steps.filter((s) => s.barId === bar.id);
+    assert.equal(steps[0].unit, bar.items.at(-1).unit);
+    assert.equal(steps[0].end, "rechts");
+    assert.equal(steps.at(-1).end, "links");
+    assert.equal(steps.find((s) => s.shared).ends[0].end, "links");
+  }
 });

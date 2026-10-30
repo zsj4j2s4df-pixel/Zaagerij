@@ -176,24 +176,26 @@ export function plan(doc) {
     }
     bars.push(...bins.filter((b) => b.items.length));
   }
+  // Right-hand length stop: prepare the right end, then cut the left end to length.
+  // Continue from the rightmost piece towards the uncut stock on the left.
   for (const bar of bars) {
     const profile = doc.profiles.find((p) => p.id === bar.profileId);
-    for (let i = 0; i < bar.items.length; i++) {
+    for (let i = bar.items.length - 1; i >= 0; i--) {
       const piece = bar.items[i],
-        next = bar.items[i + 1];
+        previous = bar.items[i - 1],
+        rightNeighbour = bar.items[i + 1];
       for (const [end, angle] of [
-        ["links", +piece.left],
         ["rechts", +piece.right],
+        ["links", +piece.left],
       ]) {
-        if (end === "links" && piece.shared) continue;
+        if (end === "rechts" && rightNeighbour?.shared) continue;
         const slope =
           end === "links"
             ? piece.shape.lt - piece.shape.lb
             : piece.shape.rt - piece.shape.rb;
-        const roll = profile.allowFlip && slope > 1e-6;
         const ends = [{ unit: piece.unit, end }];
-        if (end === "rechts" && next?.shared)
-          ends.push({ unit: next.unit, end: "links" });
+        if (end === "links" && piece.shared && previous)
+          ends.push({ unit: previous.unit, end: "rechts" });
         steps.push({
           id: `${piece.unit}:${end}`,
           unit: piece.unit,
@@ -203,11 +205,11 @@ export function plan(doc) {
           end,
           angle,
           machine: machineAngle(angle),
-          flip: roll,
+          flip: profile.allowFlip && slope > 1e-6,
           reverseRequired: !profile.allowFlip && slope > 1e-6,
-          shared: ends.length === 2,
+          shared: ends.length > 1,
           ends,
-          nextCode: ends.length === 2 ? next.code : null,
+          nextCode: ends.length > 1 ? previous.code : null,
         });
       }
     }
@@ -240,7 +242,7 @@ export function plan(doc) {
   const check = verify(doc, bars, unplaced);
   return {
     errors: [],
-    model: "planar-v2",
+    model: "right-stop-v3",
     bars,
     steps,
     unplaced,
