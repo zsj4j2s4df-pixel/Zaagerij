@@ -22,8 +22,8 @@ const screens = [
   ["inloggen", "Inloggen"],
 ];
 const KEY = "zaagerij:review:2026-10-30";
-const empty = () => ({ strokes: [], comment: "" });
-function paint(canvas, image, strokes) {
+const empty = () => ({ strokes: [], comment: "", pins: [] });
+function paint(canvas, image, strokes, pins = []) {
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   if (image) ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
@@ -45,6 +45,23 @@ function paint(canvas, image, strokes) {
     }
     ctx.stroke();
   }
+  pins.forEach((pin, i) => {
+    const x = pin.x * canvas.width,
+      y = pin.y * canvas.height,
+      r = canvas.width * 0.035;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, 2 * Math.PI);
+    ctx.fillStyle = "#006bd5";
+    ctx.fill();
+    ctx.lineWidth = canvas.width * 0.006;
+    ctx.strokeStyle = "white";
+    ctx.stroke();
+    ctx.fillStyle = "white";
+    ctx.font = `bold ${Math.round(r * 1.1)}px sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(String(i + 1), x, y);
+  });
 }
 export default function Review() {
   const [index, setIndex] = useState(0),
@@ -58,12 +75,14 @@ export default function Review() {
     [mode, setMode] = useState("view"),
     [color, setColor] = useState("#e43b54"),
     [editing, setEditing] = useState(false),
+    [editingPin, setEditingPin] = useState(null),
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState(""),
     [ready, setReady] = useState(false);
   const canvas = useRef(),
     img = useRef(),
-    draft = useRef(null);
+    draft = useRef(null),
+    pinStart = useRef(null);
   const [id, title] = screens[index],
     note = notes[id] || empty();
   useEffect(() => {
@@ -91,6 +110,14 @@ export default function Review() {
     ];
   }
   function down(e) {
+    if (mode === "pin" && ready) {
+      pinStart.current = {
+        clientX: e.clientX,
+        clientY: e.clientY,
+        point: point(e),
+      };
+      return;
+    }
     if (mode !== "draw" || !ready) return;
     e.preventDefault();
     canvas.current.setPointerCapture(e.pointerId);
@@ -103,7 +130,22 @@ export default function Review() {
     if (draft.current.points.length < 4000) draft.current.points.push(point(e));
     paint(canvas.current, null, [...note.strokes, draft.current]);
   }
-  function end() {
+  function end(e) {
+    if (mode === "pin" && pinStart.current) {
+      const start = pinStart.current;
+      pinStart.current = null;
+      if (
+        Math.hypot(e.clientX - start.clientX, e.clientY - start.clientY) < 12
+      ) {
+        setEditingPin({
+          id: crypto.randomUUID(),
+          x: start.point[0],
+          y: start.point[1],
+          text: "",
+        });
+      }
+      return;
+    }
     if (!draft.current) return;
     const stroke = draft.current;
     draft.current = null;
@@ -127,7 +169,7 @@ export default function Review() {
           screens
             .map(
               ([k, t]) =>
-                `${t}\n${notes[k]?.comment || "(Geen opmerking)"}\nTekeningen: ${notes[k]?.strokes.length || 0}\n`,
+                `${t}\n${notes[k]?.comment || "(Geen algemene opmerking)"}\n${(notes[k]?.pins || []).map((p, i) => `Punt ${i + 1} (${Math.round(p.x * 100)}%, ${Math.round(p.y * 100)}%): ${p.text}`).join("\n")}\nTekeningen: ${notes[k]?.strokes.length || 0}\n`,
             )
             .join("\n"),
       );
@@ -145,7 +187,12 @@ export default function Review() {
         ),
       );
       for (const [k] of screens) {
-        if (!notes[k]?.strokes.length && !notes[k]?.comment) continue;
+        if (
+          !notes[k]?.strokes.length &&
+          !notes[k]?.comment &&
+          !notes[k]?.pins?.length
+        )
+          continue;
         const image = await new Promise((resolve, reject) => {
           const image = new Image();
           image.onload = () => resolve(image);
@@ -156,7 +203,7 @@ export default function Review() {
         const out = document.createElement("canvas");
         out.width = image.naturalWidth;
         out.height = image.naturalHeight;
-        paint(out, image, notes[k]?.strokes || []);
+        paint(out, image, notes[k]?.strokes || [], notes[k]?.pins || []);
         const blob = await new Promise((resolve) =>
           out.toBlob(resolve, "image/png"),
         );
@@ -209,6 +256,13 @@ export default function Review() {
           >
             <Pencil size={17} />
             Tekenen
+          </button>
+          <button
+            className={mode === "pin" ? "selected" : ""}
+            onClick={() => setMode("pin")}
+          >
+            <MessageSquare size={17} />
+            Aanwijzen
           </button>
           <button onClick={() => setEditing(true)}>
             <MessageSquare size={17} />
@@ -263,9 +317,16 @@ export default function Review() {
         <p className="review-help">
           {mode === "draw"
             ? "Teken met je vinger of muis. Kies Bekijken om te scrollen."
-            : "Scroll door het voorbeeld. Kies Tekenen om iets te omcirkelen of aan te wijzen."}
+            : mode === "pin"
+              ? "Tik op de plek waar je opmerking over gaat. Daarna kun je je tekst schrijven."
+              : "Scroll door het voorbeeld. Kies Aanwijzen voor een opmerking op een specifieke plek."}
         </p>
-        <div className={"review-screen " + (mode === "draw" ? "drawing" : "")}>
+        <div
+          className={
+            "review-screen " +
+            (mode === "draw" ? "drawing" : mode === "pin" ? "pinning" : "")
+          }
+        >
           <img
             ref={img}
             src={"/review-screens/" + id + ".png"}
@@ -285,10 +346,33 @@ export default function Review() {
             onPointerUp={end}
             onPointerCancel={() => {
               draft.current = null;
+              pinStart.current = null;
               if (ready) paint(canvas.current, null, note.strokes);
             }}
           />
+          {(note.pins || []).map((pin, i) => (
+            <button
+              key={pin.id}
+              className="review-pin"
+              style={{ left: pin.x * 100 + "%", top: pin.y * 100 + "%" }}
+              aria-label={`Opmerking ${i + 1}: ${pin.text}`}
+              title={pin.text}
+              onClick={() => setEditingPin({ ...pin })}
+            >
+              {i + 1}
+            </button>
+          ))}
         </div>
+        {(note.pins || []).length > 0 && (
+          <section className="review-pins-list">
+            {note.pins.map((pin, i) => (
+              <button key={pin.id} onClick={() => setEditingPin({ ...pin })}>
+                <strong>{i + 1}</strong>
+                <span>{pin.text}</span>
+              </button>
+            ))}
+          </section>
+        )}
         {note.comment && (
           <section className="review-comment">
             <strong>Jouw opmerking</strong>
@@ -328,6 +412,81 @@ export default function Review() {
           <ArrowRight size={19} />
         </button>
       </nav>
+      {editingPin && (
+        <div className="modal-backdrop">
+          <section className="modal">
+            <h2>Opmerking op de aangewezen plek</h2>
+            <p>
+              {title} · punt{" "}
+              {(note.pins || []).findIndex((p) => p.id === editingPin.id) >= 0
+                ? note.pins.findIndex((p) => p.id === editingPin.id) + 1
+                : (note.pins || []).length + 1}
+            </p>
+            <textarea
+              autoFocus
+              rows="5"
+              aria-label="Opmerking bij deze plek"
+              placeholder="Wat wil je hier veranderen?"
+              value={editingPin.text}
+              onChange={(e) =>
+                setEditingPin((p) => ({
+                  ...p,
+                  text: e.target.value.slice(0, 10000),
+                }))
+              }
+            />
+            <button
+              className="button primary"
+              disabled={!editingPin.text.trim()}
+              onClick={() => {
+                setNotes((n) => {
+                  const item = n[id] || empty(),
+                    pins = item.pins || [];
+                  return {
+                    ...n,
+                    [id]: {
+                      ...item,
+                      pins: pins.some((p) => p.id === editingPin.id)
+                        ? pins.map((p) =>
+                            p.id === editingPin.id ? editingPin : p,
+                          )
+                        : [...pins, editingPin],
+                    },
+                  };
+                });
+                setEditingPin(null);
+                setMode("view");
+              }}
+            >
+              Opmerking bewaren
+            </button>
+            <button className="button" onClick={() => setEditingPin(null)}>
+              Annuleren
+            </button>
+            {(note.pins || []).some((p) => p.id === editingPin.id) && (
+              <button
+                className="button"
+                onClick={() => {
+                  if (confirm("Deze opmerking verwijderen?")) {
+                    setNotes((n) => ({
+                      ...n,
+                      [id]: {
+                        ...(n[id] || empty()),
+                        pins: (n[id]?.pins || []).filter(
+                          (p) => p.id !== editingPin.id,
+                        ),
+                      },
+                    }));
+                    setEditingPin(null);
+                  }
+                }}
+              >
+                Verwijderen
+              </button>
+            )}
+          </section>
+        </div>
+      )}
       {editing && (
         <div className="modal-backdrop">
           <section className="modal">

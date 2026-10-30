@@ -84,3 +84,37 @@ test("installed icon URLs are versioned and available", async ({ request }) => {
     expect((await request.get(icon.src)).status()).toBe(200);
   }
 });
+
+test("text comments can point to a specific place and persist", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/review/");
+  await page.getByRole("button", { name: "Aanwijzen", exact: true }).click();
+  const canvas = page.locator(".review-screen canvas");
+  await canvas.click({ position: { x: 100, y: 140 } });
+  await page
+    .getByRole("textbox", { name: "Opmerking bij deze plek" })
+    .fill("Deze maat groter tonen.");
+  await page
+    .getByRole("button", { name: "Opmerking bewaren", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Opmerking 1: Deze maat groter tonen." }),
+  ).toBeVisible();
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "Opmerking 1: Deze maat groter tonen." }),
+  ).toBeVisible();
+  const stored = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem("zaagerij:review:2026-10-30")),
+  );
+  expect(stored.invoer.pins[0].x).toBeGreaterThan(0);
+  expect(stored.invoer.pins[0].y).toBeGreaterThan(0);
+  await page
+    .getByRole("button", { name: "Opmerking 1: Deze maat groter tonen." })
+    .click();
+  await expect(
+    page.getByRole("textbox", { name: "Opmerking bij deze plek" }),
+  ).toHaveValue("Deze maat groter tonen.");
+});
