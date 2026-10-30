@@ -148,6 +148,46 @@ export default function DrawingReader({
           {rows.map((p, i) => (
             <section className="drawing-row" key={i}>
               <h3>Stuk {p.code}</h3>
+              {p.location?.bbox && (
+                <button
+                  className="button"
+                  onClick={() => setSource(p.location)}
+                >
+                  Wijs stuk {p.code} aan op de tekening
+                </button>
+              )}
+              {p.calculationError && (
+                <p className="notice error">{p.calculationError}</p>
+              )}
+              {p.lengthSteps?.length > 0 && (
+                <details>
+                  <summary>Hoe is de lengte van {p.code} berekend?</summary>
+                  <ol>
+                    {p.lengthSteps.map((step) => (
+                      <li key={step.id}>
+                        <strong>{step.id}</strong>:{" "}
+                        {step.op === "input"
+                          ? step.source.text
+                          : `${step.op}(${step.args.join(", ")})`}{" "}
+                        = {Number(step.value.toFixed(4))} {step.unit}
+                        {step.source && (
+                          <button
+                            className="source-button"
+                            onClick={() => setSource(step.source)}
+                          >
+                            Toon bronmaat
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ol>
+                  <p>
+                    Controleer of de maatlijnen bij de juiste uiteinden horen.
+                    De berekening controleert de gekozen geometrie niet
+                    automatisch.
+                  </p>
+                </details>
+              )}
               <p>
                 Bronprofiel: {p.profileName || "niet gevonden"} ·{" "}
                 {p.material || "materiaal niet gevonden"}

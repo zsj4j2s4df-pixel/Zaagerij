@@ -32,6 +32,33 @@ const joint = object({
   angle: { type: ["number", "null"] },
   symmetric: { type: "boolean" },
 });
+const lengthCalculation = object({
+  root: { type: ["string", "null"] },
+  nodes: {
+    type: "array",
+    items: object({
+      id: { type: "string" },
+      op: {
+        type: "string",
+        enum: [
+          "input",
+          "add",
+          "subtract",
+          "multiply",
+          "divide",
+          "hypot",
+          "sin",
+          "cos",
+          "tan",
+        ],
+      },
+      args: { type: "array", items: { type: "string" } },
+      value: { type: ["number", "null"] },
+      unit: { type: "string", enum: ["mm", "deg", "ratio"] },
+      source,
+    }),
+  },
+});
 export const drawingSchema = object({
   complete: { type: "boolean" },
   warnings: { type: "array", items: { type: "string" } },
@@ -48,6 +75,8 @@ export const drawingSchema = object({
       material: { type: "string" },
       note: { type: "string" },
       joints: object({ left: joint, right: joint }),
+      location: source,
+      lengthCalculation,
       sources: object(
         Object.fromEntries(drawingFields.map((k) => [k, source])),
       ),
@@ -77,6 +106,8 @@ export function validateDrawingResult(result) {
             typeof j.symmetric === "boolean"
           );
         })) &&
+      (p.location === undefined || validDrawingSource(p.location)) &&
+      (p.lengthCalculation === undefined || validChain(p.lengthCalculation)) &&
       typeof p.code === "string" &&
       typeof p.note === "string" &&
       typeof p.profileName === "string" &&
@@ -87,19 +118,66 @@ export function validateDrawingResult(result) {
         return (
           (p[k] === null ||
             (typeof p[k] === "number" && Number.isFinite(p[k]))) &&
-          s &&
-          ["stated", "inferred", "missing"].includes(s.status) &&
-          [null, 1, 2].includes(s.file) &&
-          (s.text === null || typeof s.text === "string") &&
-          (s.page === null || (Number.isInteger(s.page) && s.page > 0)) &&
-          (s.status !== "missing" || p[k] === null) &&
-          (s.bbox === null ||
-            (Array.isArray(s.bbox) &&
-              s.bbox.length === 4 &&
-              s.bbox.every((n) => Number.isFinite(n) && n >= 0 && n <= 1) &&
-              s.bbox[2] >= s.bbox[0] &&
-              s.bbox[3] >= s.bbox[1]))
+          validDrawingSource(s) &&
+          (s.status !== "missing" || p[k] === null)
         );
       }),
   );
+}
+
+export function validDrawingSource(s) {
+  return (
+    !!s &&
+    ["stated", "inferred", "missing"].includes(s.status) &&
+    [null, 1, 2].includes(s.file) &&
+    (s.text === null || typeof s.text === "string") &&
+    (s.page === null || (Number.isInteger(s.page) && s.page > 0)) &&
+    (s.bbox === null ||
+      (Array.isArray(s.bbox) &&
+        s.bbox.length === 4 &&
+        s.bbox.every(
+          (n) =>
+            typeof n === "number" && Number.isFinite(n) && n >= 0 && n <= 1,
+        ) &&
+        s.bbox[2] >= s.bbox[0] &&
+        s.bbox[3] >= s.bbox[1]))
+  );
+}
+function validChain(c) {
+  return (
+    !!c &&
+    (c.root === null || typeof c.root === "string") &&
+    Array.isArray(c.nodes) &&
+    c.nodes.length <= 40 &&
+    c.nodes.every(
+      (n) =>
+        n &&
+        typeof n.id === "string" &&
+        [
+          "input",
+          "add",
+          "subtract",
+          "multiply",
+          "divide",
+          "hypot",
+          "sin",
+          "cos",
+          "tan",
+        ].includes(n.op) &&
+        Array.isArray(n.args) &&
+        n.args.length <= 2 &&
+        n.args.every((a) => typeof a === "string") &&
+        (n.value === null ||
+          (typeof n.value === "number" && Number.isFinite(n.value))) &&
+        ["mm", "deg", "ratio"].includes(n.unit) &&
+        validDrawingSource(n.source),
+    )
+  );
+}
+export function drawingSources(piece) {
+  return [
+    ...Object.values(piece.sources),
+    ...(piece.location ? [piece.location] : []),
+    ...(piece.lengthCalculation?.nodes || []).map((n) => n.source),
+  ];
 }

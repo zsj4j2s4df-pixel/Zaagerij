@@ -48,14 +48,14 @@ een machine-instelling vanuit recht, een binnenhoek en een richtingsverandering.
 Alleen bij aantoonbaar symmetrisch verstek mag de server een verbindingshoek
 verdelen. Binnenhoek 135° en richtingsverandering 45° leveren beide machine
 22,5° en tekeningszaaghoek 67,5°. Een stompe haakse aansluiting heeft juist
-zaaghoek 90° en machine 0°. De eerder uitgesproken 51° was een
-spraakmisverstand en vormt geen projectgegeven.
+zaaghoek 90° en machine 0°. Een eerder verkeerd verstaan hoekgetal is geen projectgegeven.
 
 De server herberekent hoekwaarden uit deze classificatie; onduidelijke
 verbindingen blijven leeg. De controleweergave toont de gebruikte hoek en formule.
 Dit voorkomt rekenfouten na de classificatie, maar bewijst niet dat de AI de
 verbinding goed heeft herkend. Samenstellingslengtes mogen alleen uit sluitende
-maatketens worden afgeleid, met uitleg in de notitie. Een onafhankelijke
-algemene oplosser voor samenstellingsgeometrie en genummerde beeldsegmentatie
-zijn hiermee nog niet gerealiseerd. Praktijkvalidatie met de twee ingestuurde
+maatketens worden afgeleid, met uitleg in de notitie. De server controleert nu een begrensde maatketen met eenheden, bronmaten,
+optellen/aftrekken, projecties en Pythagoras. Dit is nog geen algemene
+CAD-oplosser: de door AI gekozen eindpunten, verbindingen en brongetallen
+moeten in de controleweergave worden beoordeeld. Praktijkvalidatie met de twee ingestuurde
 foto's via de echte API staat nog open.
